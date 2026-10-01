@@ -1,0 +1,40 @@
+name: Standalone build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ cmake ninja-build python3-dev
+          python3 -m pip install --disable-pip-version-check -r applications/psisimulation/requirements.txt
+
+      - name: Build standalone bindings
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target predict_distribution qdistance -j "$(nproc)"
+
+      - name: Import bindings
+        env:
+          PYTHONPATH: ${{ github.workspace }}/bin
+        run: |
+          python3 - <<'PY'
+          import predict_distribution
+          import qdistance
+          print("predict_distribution:", predict_distribution.__file__)
+          print("qdistance:", qdistance.__file__)
+          PY
+
+      - name: Compile Python sources
+        run: python3 -m compileall -q applications/psisimulation

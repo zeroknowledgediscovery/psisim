@@ -1,0 +1,16 @@
+build/
+build-*/
+bin/*.so
+bin/libomp.so*
+CMakeCache.txt
+CMakeFiles/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+results/
+*.gif
+
+_upstream_lsm/

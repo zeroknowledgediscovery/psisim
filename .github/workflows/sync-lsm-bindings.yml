@@ -1,0 +1,82 @@
+name: Sync LSM dev-static runtime
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-lsm-dev-static-runtime
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Require private LSM read token
+        env:
+          LSM_SYNC_TOKEN: ${{ secrets.LSM_SYNC_TOKEN }}
+        run: |
+          if [[ -z "$LSM_SYNC_TOKEN" ]]; then
+            echo "::error::Set LSM_SYNC_TOKEN with read access to zeroknowledgediscovery/lsm."
+            exit 1
+          fi
+
+      - name: Checkout PsiSim
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout LSM dev-static
+        uses: actions/checkout@v4
+        with:
+          repository: zeroknowledgediscovery/lsm
+          ref: dev-static
+          token: ${{ secrets.LSM_SYNC_TOKEN }}
+          path: _upstream_lsm
+          fetch-depth: 1
+
+      - name: Synchronize runtime sources
+        run: bash scripts/sync_lsm_runtime.sh _upstream_lsm
+
+      - name: Check whether runtime files changed
+        id: diff
+        run: |
+          git add bindings include src LICENSE LSM_RUNTIME_SOURCE_COMMIT
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build dependencies
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ cmake ninja-build python3-dev
+          python3 -m pip install --disable-pip-version-check -r applications/psisimulation/requirements.txt
+
+      - name: Build synchronized bindings
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cmake -S . -B build-sync -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-sync --target predict_distribution qdistance -j "$(nproc)"
+          PYTHONPATH="$PWD/bin" python3 - <<'PY'
+          import predict_distribution
+          import qdistance
+          print("sync build/import PASS")
+          PY
+
+      - name: Commit synchronized runtime
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          sha="$(cat LSM_RUNTIME_SOURCE_COMMIT)"
+          git config user.name "psisim-lsm-sync"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Sync LSM bindings from dev-static @ ${sha:0:12}"
+          git push origin HEAD:main
