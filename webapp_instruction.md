@@ -23,8 +23,8 @@ time.
 
 ## 1. Scientific object shown by the webapp
 
-For model variables \(X_1,\ldots,X_d\), with categorical alphabets
-\(\Sigma_i\), the full state is
+For model variables $X_1,\ldots,X_d$, with categorical alphabets
+$\Sigma_i$, the full state is
 
 ```math
 \Psi=(p_1,p_2,\ldots,p_d),
@@ -32,12 +32,12 @@ For model variables \(X_1,\ldots,X_d\), with categorical alphabets
 p_i\in\Delta(\Sigma_i).
 ```
 
-Each \(p_i\) is a categorical response distribution for one GSS variable.
+Each $p_i$ is a categorical response distribution for one GSS variable.
 
 The webapp should communicate three levels simultaneously:
 
 1. **one variable**: the current distribution over its possible answers;
-2. **the full state**: all distributions together, \(\Psi\);
+2. **the full state**: all distributions together, $\Psi$;
 3. **the dependency system**: learned links between variables defined by the
    actual native LSM trees.
 
@@ -197,7 +197,7 @@ state = resident_empty_state(model)
 psi = snapshot(state)
 ```
 
-`resident_empty_state()` creates \(\Psi_0\) and wraps it in a resident native
+`resident_empty_state()` creates $\Psi_0$ and wraps it in a resident native
 `CenteredLdpPsiState`.
 
 The state object should remain resident for the full browser session. Do not
@@ -205,7 +205,7 @@ reload the model for every question.
 
 ### Hard observation
 
-A concrete response for variable \(i\) is applied with
+A concrete response for variable $i$ is applied with
 
 ```python
 summary = state.hard_observe(
@@ -219,7 +219,7 @@ summary = state.hard_observe(
 
 This:
 
-1. collapses \(p_i\) to the selected point mass;
+1. collapses $p_i$ to the selected point mass;
 2. propagates the centered hard response to dependent targets;
 3. clamps the observation so subsequent updates cannot erase it.
 
@@ -258,7 +258,7 @@ Use the native binding rather than an ad hoc frontend distance.
 
 ---
 
-## 4. Initialization at \(\Psi_0\)
+## 4. Initialization at $\Psi_0$
 
 The session begins from the all-missing hard row
 
@@ -299,16 +299,16 @@ The initial UI should say something close to:
 The user should be able to search for a GSS item by variable name, short
 label, question text, or answer text.
 
-Selecting variable \(i\) should open a question card containing:
+Selecting variable $i$ should open a question card containing:
 
 - full GSS question text;
 - variable name and native column index;
-- current \(p_i\);
+- current $p_i$;
 - every legal response category and probability;
 - whether the variable is already observed/clamped.
 
-The distribution displayed must be from the **current** \(\Psi\), not always
-from \(\Psi_0\).
+The distribution displayed must be from the **current** $\Psi$, not always
+from $\Psi_0$.
 
 Example:
 
@@ -339,7 +339,7 @@ Draw one concrete category from the current marginal:
 \sigma\sim p_i.
 ```
 
-Then pass \(\sigma\) to `hard_observe()`.
+Then pass $\sigma$ to `hard_observe()`.
 
 The UI can briefly animate the categorical probabilities before settling on
 the sampled answer. Use a seeded session RNG so the demonstration can be
@@ -371,8 +371,8 @@ native `hard_observe(..., clamp=True)` operation.
 
 ## 7. What the answer does mathematically
 
-Suppose the current queried marginal is \(p_i\) and the selected answer is
-\(\sigma\).
+Suppose the current queried marginal is $p_i$ and the selected answer is
+$\sigma$.
 
 The source distribution becomes
 
@@ -390,7 +390,7 @@ The centered displacement is
 \delta_{\sigma}-p_i.
 ```
 
-For each learned target \(j\) whose native tree actually uses source \(i\),
+For each learned target $j$ whose native tree actually uses source $i$,
 PsiSim uses the cached one-coordinate hard-response kernel
 
 ```math
@@ -409,7 +409,7 @@ r_{j\leftarrow i}
 K_{j\leftarrow i}(\cdot\mid s).
 ```
 
-With the default response scale \(\alpha=1\),
+With the default response scale $\alpha=1$,
 
 ```math
 p_j^{+}
@@ -429,7 +429,7 @@ rest of the system but cannot overwrite the supplied answer.
 
 ## 8. Relaxation: the later ripples
 
-After the hard observation, execute sequential finite-\(n\) mode sweeps.
+After the hard observation, execute sequential finite-$n$ mode sweeps.
 
 For the initial implementation:
 
@@ -466,7 +466,7 @@ variables.
 
 A literal full display of all GSS distributions is too dense. The default
 visualization should therefore show a focused subset while the backend retains
-the entire \(\Psi\).
+the entire $\Psi$.
 
 ### Node meaning
 
@@ -489,8 +489,8 @@ another are not a shared numeric state.
 
 ### Edge meaning
 
-Display a directed edge \(i\to j\) when target tree \(j\) actually uses source
-\(i\).
+Display a directed edge $i\to j$ when target tree $j$ actually uses source
+$i$.
 
 An edge means learned model dependency, not necessarily causation.
 
@@ -514,7 +514,7 @@ On response:
 6. each relaxation snapshot produces another wave;
 7. the wave decays as residual movement decreases.
 
-For node \(j\), pulse intensity should be tied to the actual per-coordinate
+For node $j$, pulse intensity should be tied to the actual per-coordinate
 total variation:
 
 ```math
@@ -551,7 +551,7 @@ moving the graph itself.
 
 ---
 
-## 11. Exact \(\Psi\) view
+## 11. Exact $\Psi$ view
 
 The network is intuitive but cannot by itself represent every categorical
 probability.
@@ -606,18 +606,18 @@ h_i
 ```
 
 Use the complete categorical distribution in the detail panel. Do not reduce
-the whole app to MAP answers, because the scientific object is \(\Psi\), not
+the whole app to MAP answers, because the scientific object is $\Psi$, not
 only its coordinatewise argmax.
 
 ---
 
 ## 13. The second question is the key reflexive demonstration
 
-After the first answer and relaxation, the user selects a second item \(k\).
+After the first answer and relaxation, the user selects a second item $k$.
 
-The app must display its **new current distribution** \(p_k\).
+The app must display its **new current distribution** $p_k$.
 
-This can differ from its initial distribution \(p_k^0\).
+This can differ from its initial distribution $p_k^0$.
 
 Then:
 
@@ -728,7 +728,7 @@ POST /api/session/{id}/reset
 }
 ```
 
-Create a resident \(\Psi_0\) state.
+Create a resident $\Psi_0$ state.
 
 ### Variable lookup
 
@@ -802,7 +802,7 @@ animation, e.g.:
 - previous/new entropy;
 - clamp status.
 
-The complete \(\Psi\) can remain server-side and be fetched on demand.
+The complete $\Psi$ can remain server-side and be fetched on demand.
 
 ---
 
@@ -981,14 +981,14 @@ The first usable version should include:
 - GSS 2018 only;
 - model bootstrap validation;
 - local GSS 2018 human-readable question map;
-- creation of a resident session at \(\Psi_0\);
+- creation of a resident session at $\Psi_0$;
 - searchable GSS items;
 - full current marginal for selected item;
-- simulated response sampled from current \(p_i\);
+- simulated response sampled from current $p_i$;
 - optional MAP and manual response modes;
 - native `hard_observe(..., clamp=True)`;
 - immediate response snapshot;
-- five native mode sweeps with \(n=10\);
+- five native mode sweeps with $n=10$;
 - streamed snapshots;
 - per-variable TV changes;
 - stable mind-map visualization;
@@ -1122,7 +1122,7 @@ history now contains observation 1
 ```
 
 The user then asks a second item. Its response distribution is obtained from
-the **current** \(\Psi\), not \(\Psi_0\). That second answer launches a second
+the **current** $\Psi$, not $\Psi_0$. That second answer launches a second
 ripple while the first answer remains clamped.
 
 That repeated query, response, perturbation, and relaxation cycle is the core
