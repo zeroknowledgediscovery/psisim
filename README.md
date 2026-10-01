@@ -680,7 +680,7 @@ PsiSim draws
 ```math
 (N_\sigma)_\sigma
 \sim
-\operatorname{Multinomial}(n,p_i)
+\mathrm{Multinomial}(n,p_i)
 ```
 
 and uses
@@ -901,7 +901,7 @@ changing question order can change the trajectory and endpoint.
 For two categorical distributions $p$ and $q$, PsiSim uses total variation
 
 ```math
-\operatorname{TV}(p,q)
+\mathrm{TV}(p,q)
 =
 \frac12
 \sum_\sigma
@@ -917,20 +917,20 @@ For a state transition
 the code reports
 
 ```math
-\operatorname{meanTV}
+\mathrm{meanTV}
 =
 \frac{1}{m}
 \sum_{i\in\mathcal T}
-\operatorname{TV}(p_i,p_i'),
+\mathrm{TV}(p_i,p_i'),
 ```
 
 and
 
 ```math
-\operatorname{maxTV}
+\mathrm{maxTV}
 =
 \max_{i\in\mathcal T}
-\operatorname{TV}(p_i,p_i'),
+\mathrm{TV}(p_i,p_i'),
 ```
 
 where $\mathcal T$ is the set of learned target trees.
@@ -943,13 +943,13 @@ sweep** with the state after the entire sweep.
 A deterministic numerical fixed point of the mode dynamics is indicated by
 
 ```math
-\operatorname{maxTV}\rightarrow 0
+\mathrm{maxTV}\rightarrow 0
 ```
 
 and
 
 ```math
-\operatorname{meanTV}\rightarrow 0.
+\mathrm{meanTV}\rightarrow 0.
 ```
 
 This is a numerical fixed point of the implemented map.  It is not, by itself,
@@ -1067,7 +1067,7 @@ M_j=\frac12(P_j^x+P_j^y).
 The implementation computes the bit-based Jensen-Shannon divergence
 
 ```math
-\operatorname{JS}_2(P,Q)
+\mathrm{JS}_2(P,Q)
 =
 \frac12
 D_{\mathrm{KL},2}(P\|M)
@@ -1081,7 +1081,7 @@ and then takes its square root:
 ```math
 d_j(x,y)
 =
-\sqrt{\operatorname{JS}_2(P_j^x,P_j^y)}.
+\sqrt{\mathrm{JS}_2(P_j^x,P_j^y)}.
 ```
 
 The global qdistance is
