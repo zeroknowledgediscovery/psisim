@@ -168,6 +168,147 @@ when
 The centered update propagates a perturbation from source \(i\) only to these
 dependent targets.  It does not blindly update every coordinate.
 
+
+### 2.4 Exact native tree inference semantics
+
+The serialized native predictor is a categorical decision tree.  At an internal
+split node, let the split variable be \(X_c\), with a left category subset
+\(A_L\) and a right category subset \(A_R\).
+
+For a hard input row \(x\):
+
+* if \(x_c\neq\varnothing\) and its encoded category lies in \(A_L\), inference
+  follows the left child;
+* if it lies in \(A_R\), inference follows the right child;
+* if the value is missing/unresolved at that split, inference evaluates **both**
+  children and mixes their output distributions using learned subtree mass.
+
+Let
+
+\[
+N_L
+\]
+
+and
+
+\[
+N_R
+\]
+
+be the total target counts represented below the left and right child
+respectively.  Missing-value routing uses
+
+\[
+\pi_L
+=
+\frac{N_L}{N_L+N_R},
+\qquad
+\pi_R
+=
+1-\pi_L,
+\]
+
+and returns
+
+\[
+p
+=
+\pi_L p_L
++
+\pi_R p_R.
+\]
+
+At a leaf, the target distribution is obtained by normalizing the stored target
+counts.
+
+This recursion is the implementation of
+
+\[
+\phi_j(x_{-j}).
+\]
+
+It also explains two important constructions used later:
+
+1. for the all-missing row, every unresolved split is marginalized by learned
+   subtree mass, producing the empty-state marginal \(p_j^0\);
+2. for a one-coordinate hard row \(x^{(i=\sigma)}\), only information carried
+   by that one source symbol is resolved explicitly, while all other split
+   variables are marginalized in the same manner.
+
+Consequently the kernel
+
+\[
+K_{j\leftarrow i}(\cdot\mid\sigma)
+\]
+
+is a native-tree inference quantity, not an externally estimated response
+matrix.
+
+### 2.5 Hard inference versus the soft-\(\Psi\) predictor
+
+The vendored \`predict_distribution\` binding also implements a soft predictor
+
+\[
+\phi_j^{\mathrm{soft}}(\Psi),
+\]
+
+which routes probability mass through a tree rather than a single hard
+category.  At a split on variable \(c\), each category mass in \(p_c\) is sent
+to the branch containing that category; unresolved mass is divided according
+to the same subtree-mass rule.  If a predictor variable appears again deeper
+in the tree, the branch-conditioned distribution for that variable is carried
+recursively.
+
+That soft predictor is useful for other mean-field constructions, but the
+**centered dynamics used by PsiSim is deliberately defined from the hard
+one-coordinate kernels** \(K_{j\leftarrow i}\).  The current progressive and
+equilibrium workflows should therefore not be described as repeatedly applying
+\(\phi^{\mathrm{soft}}\) synchronously.
+
+### 2.6 How the native LSM trees are learned
+
+The upstream LSM trainer builds categorical target trees.  When all target
+columns are requested, the model contains one serialized tree per modeled
+coordinate.  Internal splits are categorical subset tests.
+
+For a candidate feature with \(k\) observed levels, the upstream trainer
+supports several split-search regimes:
+
+* **exact**: search the unrestricted oriented nonempty proper subset family,
+  containing \(2^k-2\) possible categorical subsets;
+* **fast, binary target**: order feature levels by conditional target rate and
+  test the \(k-1\) contiguous cuts;
+* **fast, multiclass target**: represent levels by
+  \(P(Y\mid X=x)\), group similar levels by Jensen-Shannon divergence into a
+  bounded set of temporary super-levels, search that compressed alphabet, and
+  serialize the winning split back in the original category alphabet;
+* **auto**: choose exact or fast locally according to observed feature
+  cardinality.
+
+These choices affect the learned tree topology and therefore the conditional
+operators \(\phi_i\).  They do **not** alter the category alphabets stored in
+the source maps.
+
+PsiSim itself does not retrain the model.  It consumes the serialized native
+trees and source maps exactly as supplied.  Therefore a scientific run should
+record the identity/provenance of the native model rather than infer or guess
+its original trainer flags from the PsiSim code.
+
+### 2.7 Model objects retained in memory
+
+For a resident PsiSim state, the native predictor preloads the learned trees.
+The centered runtime then retains
+
+* the source-map encoder/decoder;
+* the preloaded native trees;
+* the source-to-dependent-target graph obtained from actual tree usage;
+* the hard-response kernel cache indexed by \((i,j,\sigma)\);
+* the current probability-valued state \(\Psi\); and
+* the set of clamped hard observations.
+
+Thus repeated questions and sweeps reuse the same model and warmed response
+cache instead of reloading the complete model at every update.
+
 ---
 
 ## 3. The probability-valued state space
