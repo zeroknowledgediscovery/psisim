@@ -169,6 +169,24 @@ built from
 bindings/predict_distribution_py.cpp
 ```
 
+The default webapp dynamics live in the PsiSim-owned extension
+
+```text
+bin/psisim_dynamics*.so
+```
+
+built from
+
+```text
+bindings/psisim_dynamics_py.cpp
+```
+
+It provides `used_columns()` (the learned dependency graph) and
+`PropagationPsiState`, the propagation-only centered dynamics of section 8.
+It is not part of the vendored LSM runtime, so the LSM sync never overwrites
+it; its wave 0 is regression-tested to equal the vendored
+`CenteredLdpPsiState.hard_observe` exactly.
+
 The optional distance extension is
 
 ```text
@@ -183,72 +201,69 @@ bindings/qdistance_py.cpp
 
 ### Interactive simulation binding
 
-The webapp should use `predict_distribution` through the current helpers:
+The webapp keeps one resident propagation-only state per browser session,
+initialised at $\Psi_0$:
 
 ```python
-from applications.psisimulation.common import (
-    resolve_model,
-    resident_empty_state,
-    snapshot,
-)
+import psisim_dynamics
+from applications.psisimulation.common import psi0, resolve_model
 
 model = resolve_model("gss/gss_2018")
-state = resident_empty_state(model)
-psi = snapshot(state)
+state = psisim_dynamics.PropagationPsiState(
+    str(model / "trees" / "binary"), str(model), psi0(model)
+)
+psi = state.to_python()
 ```
-
-`resident_empty_state()` creates $\Psi_0$ and wraps it in a resident native
-`CenteredLdpPsiState`.
 
 The state object should remain resident for the full browser session. Do not
 reload the model for every question.
 
-### Hard observation
+### Hard observation (wave 0)
 
 A concrete response for variable $i$ is applied with
 
 ```python
-summary = state.hard_observe(
-    source=i,
-    value=raw_answer_label,
-    response_scale=1.0,
-    threads=threads,
-    clamp=True,
-)
+summary = state.hard_observe(i, raw_answer_label, clamp=True, threads=threads)
 ```
 
 This:
 
 1. collapses $p_i$ to the selected point mass;
-2. propagates the centered hard response to dependent targets;
-3. clamps the observation so subsequent updates cannot erase it.
+2. propagates the centered hard response
+   $\Delta_i^{(0)}=\delta_\sigma-p_i^{\text{before}}$ to dependent targets;
+3. clamps the observation so subsequent updates cannot erase it;
+4. records the change actually induced in every target as the perturbation
+   of the next wave.
 
-Afterward:
+The result is identical to the vendored
+`CenteredLdpPsiState.hard_observe(..., response_scale=1.0, clamp=True)`.
+Afterward `state.to_python()` is the first post-intervention animation frame.
+
+### Propagation waves (default relaxation)
+
+Then run waves:
 
 ```python
-psi_after_hard = snapshot(state)
+summary = state.wave(threads=threads)
 ```
 
-This is the first post-intervention animation frame.
+Each wave propagates **only** the deltas newly induced by the previous wave
+(section 8). With nothing pending a wave is the identity, bit for bit. Take a
+snapshot after every wave. The webapp runs up to five waves per answer by
+default.
 
-### Relaxation
+The default webapp does **not** run `state.sweep(event="mode", n=10)` (or any
+other sweep) after initialization or as passive relaxation. Finite-$n$ sweeps
+inject a new empirical perturbation at every variable by quantizing $p_i$ onto
+the $1/n$ grid; they move $\Psi_0$ without any answer and are therefore not
+passive relaxation.
 
-Then execute centered mode sweeps:
+### Optional finite-$n$ empirical dynamics
 
-```python
-summary = state.sweep(
-    n=10,
-    event="mode",
-    seed=session_seed,
-    response_scale=1.0,
-    threads=threads,
-    random_permutation=False,
-)
-```
-
-Take a snapshot after every sweep. The first webapp should use up to five
-sweeps, matching the existing progressive example, or stop early when the
-residual movement is sufficiently small.
+`CenteredLdpPsiState.sweep(event="mode" | "sample", n=...)` remains available
+as an explicitly labelled, optional finite-sample / LDP experiment (a session
+type chosen when a session is created). It must never be presented as the
+default relaxation process.
 
 ### qdistance
 
@@ -292,6 +307,17 @@ The initial UI should say something close to:
 > No answers have been supplied. Every node is showing the response
 > distribution implied by the GSS 2018 LSM from the empty state.
 
+Under the default dynamics, $\Psi_0$ is stationary:
+
+```math
+\text{no external intervention} \;\Rightarrow\; \text{no motion},
+\qquad
+\Psi_0 \rightarrow \Psi_0
+```
+
+exactly, until an actual survey response is imposed. Everything that moves on
+screen was moved by an answer.
+
 ---
 
 ## 5. Querying a survey variable
@@ -327,45 +353,22 @@ Current response distribution:
 
 ## 6. How a response is generated
 
-The interface should support three explicitly different modes.
-
-### Simulate response
-
-This should be the default demonstration mode.
-
-Draw one concrete category from the current marginal:
+Choosing a topic asks it immediately: there is no separate response-mode
+choice in the UI. The response is simulated by drawing one concrete category
+from the **current** marginal,
 
 ```math
-\sigma\sim p_i.
+\sigma\sim p_i,
 ```
 
-Then pass $\sigma$ to `hard_observe()`.
+and passing $\sigma$ to `hard_observe()`.
 
 The UI can briefly animate the categorical probabilities before settling on
 the sampled answer. Use a seeded session RNG so the demonstration can be
-reproduced.
+reproduced; show the uniform draw and the seed.
 
-### Most likely response
-
-Optionally choose
-
-```math
-\sigma
-=
-\arg\max_{s\in\Sigma_i} p_i(s).
-```
-
-Label this clearly as deterministic/MAP. Do not call it sampling.
-
-### Choose response
-
-Allow the user to select a category manually. This turns the app into an
-intervention tool:
-
-> What happens to the rest of the modeled worldview if this answer is forced?
-
-Once submitted, both simulated and manually selected answers use the same
-native `hard_observe(..., clamp=True)` operation.
+Inspecting a topic (clicking its node) does not answer it; the topic card
+offers a single "Ask this topic" action that uses the same draw.
 
 ---
 
@@ -427,34 +430,102 @@ rest of the system but cannot overwrite the supplied answer.
 
 ---
 
-## 8. Relaxation: the later ripples
+## 8. Propagation waves: the later ripples
 
-After the hard observation, execute sequential finite-$n$ mode sweeps.
+After the hard observation, propagate only the perturbation created by that
+observation, wave by wave.
 
-For the initial implementation:
+Initial perturbation:
 
-```text
-event                 mode
-empirical_n           10
-response_scale        1.0
-random_permutation    false
-maximum sweeps        5
+```math
+\Delta_i^{(0)}
+=
+\delta_\sigma-p_i^{\text{before}}.
 ```
 
-Each sweep updates the resident state and produces a new snapshot.
+For each dependent, non-clamped target $j$, use the existing centered
+hard-response kernel:
 
-The animation sequence should therefore be:
+```math
+r_{j\leftarrow i}^{(0)}
+=
+\sum_s
+\Delta_i^{(0)}(s)
+K_{j\leftarrow i}(\cdot\mid s),
+\qquad
+p_j^{\text{after}}
+=
+\Pi_{\Delta(\Sigma_j)}
+\left[p_j^{\text{before}}+r_{j\leftarrow i}^{(0)}\right].
+```
+
+Then compute the actual newly induced change
+
+```math
+\Delta_j^{(1)}
+=
+p_j^{\text{after}}-p_j^{\text{before}}.
+```
+
+That new $\Delta_j^{(1)}$, and only that incremental change, is the
+perturbation propagated during the next wave to the variables that depend on
+$j$. Repeat wave by wave. When several sources of one wave reach the same
+target, their responses are summed and projected once.
+
+Rules:
+
+- propagate only the newly generated delta from the preceding wave, never the
+  accumulated change from the original state (otherwise feedback loops
+  double-count earlier perturbations);
+- clamped/observed variables remain fixed and are never modified as targets;
+- response scale $1.0$, no damping (for now);
+- invariant: $\Delta^{(0)}=0 \Rightarrow \Delta^{(1)}=\Delta^{(2)}=\cdots=0$.
+
+The animation sequence is:
 
 ```text
 frame 0    state immediately before the answer
-frame 1    immediate hard-observation response
-frame 2    after relaxation sweep 1
-frame 3    after relaxation sweep 2
-frame 4    after relaxation sweep 3
+frame 1    wave 0: immediate hard-observation response ("splash")
+frame 2    after wave 1
+frame 3    after wave 2
 ...
 ```
 
-The native diagnostics `mean_tv` and `max_tv` quantify how much the state is
-still moving. The visual ripple should fade as those quantities become small.
+The webapp runs up to five waves per answer (configurable). If deltas remain
+pending after the last wave, they are dropped and the remaining perturbation
+(sum of TV norms) is reported, so one answer's waves never leak into the next
+answer's.
+
+The regression test `tests/test_propagation_dynamics.py` checks on the real
+model that (1) $\Psi_0$ does not move without an intervention, (2) wave 0 is
+non-zero and equals the vendored `hard_observe`, (3) each later wave equals an
+independent reconstruction from the previous wave's newly induced deltas and
+not from the accumulated change, and (4) clamped coordinates never change.
+
+### Observed behaviour at response scale 1 (open issue)
+
+On GSS 2018 the undamped waves do not die out. After an answer, the total
+pending perturbation first shrinks for a few waves and then grows by roughly
+1.3x per wave until simplex projection saturates it; it then keeps oscillating
+indefinitely. Unasked items can be driven to point masses. A likely cause is
+that each kernel $K_{j\leftarrow i}$ is a one-coordinate (marginal) response,
+so a target that receives correlated perturbations from many sources counts
+the same association several times. Damping or a different response scale is
+a separate decision and is deliberately not applied yet.
 
 ---
+
+## 9. Visualizing that the whole state changes
+
+The key message is that an answer to one topic changes $\Psi$ throughout,
+not only the answered coordinate. The webapp shows this with:
+
+- a live counter: how many other topics the current answer has moved, how
+  many by more than 0.01, and the mean shift (TV);
+- the field coloured by each item's change caused by this answer (log scale,
+  so small widespread shifts are visible), switchable to change since
+  $\Psi_0$; items first reached in the current wave are outlined;
+- a $\Psi$ change map: one row per answer, one column per modelled item, plus
+  a row for the total change since $\Psi_0$;
+- for any inspected topic, its distribution after every answer, showing how
+  topics that were never asked shift.

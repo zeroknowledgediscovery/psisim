@@ -1,11 +1,22 @@
 """Native PsiSim simulation engine behind the webapp.
 
-All mathematics runs in the vendored C++ runtime through the existing
-``applications/psisimulation`` helpers. This module only:
+All mathematics runs in native code. This module only:
 
 * loads the model, variable metadata and the learned dependency graph once;
-* keeps one resident ``CenteredLdpPsiState`` per browser session;
-* turns ``hard_observe`` + ``sweep`` calls into a stream of snapshot frames.
+* keeps one resident native state per browser session;
+* turns native calls into a stream of snapshot frames.
+
+Default dynamics: propagation-only centered waves
+(``psisim_dynamics.PropagationPsiState``). No intervention => no motion, so
+Psi0 is stationary until a survey answer is imposed. An answer X_i = sigma is
+applied with ``hard_observe`` (wave 0, the "splash"); each later wave
+propagates only the deltas newly induced by the previous wave (the "ripples").
+
+Optional finite-n empirical dynamics (``event="mode"`` / ``"sample"`` sweeps
+of the vendored ``CenteredLdpPsiState``) are available as a separate session
+type. They inject a new finite-n perturbation at every variable on every
+sweep, so they move Psi0 even without an answer; they are an LDP experiment,
+not the default relaxation.
 """
 from __future__ import annotations
 
@@ -46,11 +57,31 @@ CACHE_DIR = Path(
     os.environ.get("PSISIM_WEBAPP_CACHE", "~/.cache/psisim/webapp")
 ).expanduser()
 
-# Relaxation defaults from webapp_instruction.md section 8.
-DEFAULT_EMPIRICAL_N = 10
-DEFAULT_MAX_SWEEPS = 5
-DEFAULT_TOL = 1e-3
-MAX_SWEEPS_LIMIT = 10
+DYNAMICS = {
+    "propagation": {
+        "label": "Propagation waves (default)",
+        "help": "Only an answer moves the state: its perturbation spreads "
+                "wave by wave through the learned links. Psi0 is stationary.",
+        "finite_n": False,
+    },
+    "mode": {
+        "label": "Finite-n mode sweeps (optional LDP experiment)",
+        "help": "Every sweep replaces each marginal by its modal finite-n "
+                "empirical type. This injects new perturbations everywhere and "
+                "moves Psi0 even without an answer.",
+        "finite_n": True,
+    },
+    "sample": {
+        "label": "Finite-n sampled sweeps (optional LDP experiment)",
+        "help": "Every sweep replaces each marginal by a sampled finite-n "
+                "empirical type. Stochastic; moves Psi0 even without an answer.",
+        "finite_n": True,
+    },
+}
+DEFAULT_DYNAMICS = "propagation"
+DEFAULT_MAX_STEPS = 5      # waves (propagation) or sweeps (finite-n)
+MAX_STEPS_LIMIT = 20
+DEFAULT_EMPIRICAL_N = 10   # finite-n dynamics only
 RESPONSE_SCALE = 1.0
 
 # Ignore floating-point dust when deciding which coordinates changed.
@@ -69,17 +100,17 @@ MAX_SESSIONS = max(1, env_int("PSISIM_MAX_SESSIONS", 4))
 SESSION_TTL = env_int("PSISIM_SESSION_TTL", 1800)
 
 
-def load_graph_binding():
+def load_dynamics_binding():
     if str(BIN) not in sys.path:
         sys.path.insert(0, str(BIN))
     try:
-        import psisim_graph
+        import psisim_dynamics
     except ImportError as exc:
         raise RuntimeError(
-            "Could not import psisim_graph. Build it with:\n"
-            "  cmake --build build --target predict_distribution psisim_graph"
+            "Could not import psisim_dynamics. Build it with:\n"
+            "  cmake --build build --target predict_distribution psisim_dynamics"
         ) from exc
-    return psisim_graph
+    return psisim_dynamics
 
 
 def tv_array(a: list[dict], b: list[dict]) -> np.ndarray:
@@ -184,8 +215,8 @@ class Model:
             raise RuntimeError("Psi0 width does not match model width")
         self._align_categories(self.psi0)
 
-        graph = load_graph_binding()
-        used = graph.used_columns(str(self.trees_dir), self.tree_ids)
+        self.dynamics = load_dynamics_binding()
+        used = self.dynamics.used_columns(str(self.trees_dir), self.tree_ids)
         learned = set(self.tree_ids)
         self.edges: list[tuple[int, int]] = sorted(
             (s, t)
@@ -287,18 +318,21 @@ class Model:
             "layout": np.round(self.layout, 4).ravel().tolist(),
             "psi0": self.encode(self.psi0),
             "defaults": {
+                "dynamics": DEFAULT_DYNAMICS,
+                "max_steps": DEFAULT_MAX_STEPS,
+                "max_steps_limit": MAX_STEPS_LIMIT,
                 "empirical_n": DEFAULT_EMPIRICAL_N,
-                "max_sweeps": DEFAULT_MAX_SWEEPS,
-                "tol": DEFAULT_TOL,
-                "max_sweeps_limit": MAX_SWEEPS_LIMIT,
                 "response_scale": RESPONSE_SCALE,
-                "event": "mode",
-                "random_permutation": False,
             },
+            "dynamics": DYNAMICS,
         }
 
-    def new_state(self):
-        """A resident centered-LDP state initialised at the shared Psi0."""
+    def new_state(self, dynamics: str = DEFAULT_DYNAMICS):
+        """A resident native state initialised at the shared Psi0."""
+        if dynamics == "propagation":
+            return self.dynamics.PropagationPsiState(
+                str(self.trees_dir), str(self.path), self.psi0
+            )
         return self.lsm.centered_ldp_state_from_psi(
             str(self.trees_dir),
             self.psi0,
@@ -320,11 +354,13 @@ class AnswerError(ValueError):
 class Session:
     id: str
     seed: int
+    dynamics: str
     state: object
     psi: list[dict]
     rng: np.random.Generator
     lock: threading.Lock = field(default_factory=threading.Lock)
     observed: list[dict] = field(default_factory=list)
+    history: list[dict] = field(default_factory=list)  # one entry per answer
     log: list[dict] = field(default_factory=list)
     created: float = field(default_factory=time.time)
     last_used: float = field(default_factory=time.time)
@@ -333,9 +369,31 @@ class Session:
         self.last_used = time.time()
 
 
+# A coordinate counts as "moved" above the 1e-6 resolution of the streamed
+# probabilities, so server statistics match what the browser can show.
+MOVED_EPS = 1.25e-6  # between 1e-6 and the next value on the rounded grid
+
+
+def change_stats(tv: np.ndarray, learned: np.ndarray, clamped: set[int]) -> dict:
+    """Movement of the unclamped learned coordinates ("other topics")."""
+    mask = learned.copy()
+    for c in clamped:
+        mask[c] = False
+    t = tv[mask]
+    return {
+        "moved": int((t > MOVED_EPS).sum()),
+        "moved_001": int((t > 0.01).sum()),
+        "moved_005": int((t > 0.05).sum()),
+        "mean_tv": float(t.mean()) if len(t) else 0.0,
+        "max_tv": float(t.max()) if len(t) else 0.0,
+        "other_topics": int(mask.sum()),
+    }
+
+
 class Engine:
     def __init__(self, model: Model):
         self.model = model
+        self.learned = np.array([v.learned for v in model.variables])
         self.sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
         self._spare = None
@@ -343,11 +401,11 @@ class Engine:
         self._spare_thread: threading.Thread | None = None
         self.refill_spare()
 
-    # -- warm spare state: building a resident state loads all trees -------
+    # -- warm spare default state: building a state loads all trees ---------
 
     def refill_spare(self) -> None:
         def build():
-            state = self.model.new_state()
+            state = self.model.new_state(DEFAULT_DYNAMICS)
             with self._spare_lock:
                 if self._spare is None:
                     self._spare = state
@@ -359,11 +417,13 @@ class Engine:
             self._spare_thread = threading.Thread(target=build, daemon=True)
             self._spare_thread.start()
 
-    def _take_state(self):
+    def _take_state(self, dynamics: str):
+        if dynamics != DEFAULT_DYNAMICS:
+            return self.model.new_state(dynamics)
         with self._spare_lock:
             state, self._spare = self._spare, None
         if state is None:
-            state = self.model.new_state()
+            state = self.model.new_state(dynamics)
         self.refill_spare()
         return state
 
@@ -381,16 +441,20 @@ class Engine:
             oldest = min(idle, key=lambda s: s.last_used)
             del self.sessions[oldest.id]
 
-    def create(self, seed: int | None = None) -> Session:
+    def create(self, seed: int | None = None,
+               dynamics: str = DEFAULT_DYNAMICS) -> Session:
+        if dynamics not in DYNAMICS:
+            raise AnswerError(f"unknown dynamics {dynamics!r}")
         if seed is None:
             seed = secrets.randbelow(2**31 - 1) + 1
         seed = int(seed) % (2**63)
         with self._lock:
             self._evict()
-        state = self._take_state()
+        state = self._take_state(dynamics)
         session = Session(
             id=secrets.token_urlsafe(12),
             seed=seed,
+            dynamics=dynamics,
             state=state,
             psi=snapshot(state),
             rng=np.random.default_rng(seed),
@@ -414,55 +478,51 @@ class Engine:
         return {
             "session_id": s.id,
             "seed": s.seed,
+            "dynamics": s.dynamics,
             "psi": self.model.encode(s.psi),
             "observed": s.observed,
+            "history": [
+                {k: v for k, v in h.items() if k != "psi_raw"}
+                for h in s.history
+            ],
             "clamped_count": int(s.state.clamped_count),
         }
 
     def export(self, s: Session) -> dict:
         return {
             "model": self.model.key,
+            "dynamics": s.dynamics,
             "seed": s.seed,
             "observed": s.observed,
+            "answers": [
+                {k: v for k, v in h.items() if k not in ("psi", "psi_raw", "tv")}
+                for h in s.history
+            ],
             "log": s.log,
-            "hard_row": list(s.state.hard_row()),
         }
 
     # -- answering ---------------------------------------------------------
 
-    def _choose_value(
-        self, s: Session, col: int, mode: str, value: str | None
-    ) -> tuple[str, dict]:
+    def _draw(self, s: Session, col: int) -> tuple[str, float]:
+        """sigma ~ p_i from the current state, with the session's seeded RNG."""
         var = self.model.variables[col]
         q = s.psi[col]
         cats = [c for c in var.categories if q.get(c, 0.0) > 0.0] or list(q)
         probs = np.asarray([q.get(c, 0.0) for c in cats], dtype=float)
-        if mode == "sample":
-            total = probs.sum()
-            if total <= 0:
-                raise AnswerError("current distribution has no mass")
-            cdf = np.cumsum(probs / total)
-            u = float(s.rng.random())
-            k = int(min(np.searchsorted(cdf, u, side="right"), len(cats) - 1))
-            return cats[k], {"u": u}
-        if mode == "map":
-            k = max(range(len(cats)), key=lambda j: (probs[j], cats[j]))
-            return cats[k], {}
-        if mode == "choose":
-            if value is None or value not in var.categories:
-                raise AnswerError(f"{value!r} is not a legal response for {var.variable}")
-            return value, {}
-        raise AnswerError(f"unknown mode {mode!r}")
+        total = probs.sum()
+        if total <= 0:
+            raise AnswerError("current distribution has no mass")
+        cdf = np.cumsum(probs / total)
+        u = float(s.rng.random())
+        k = int(min(np.searchsorted(cdf, u, side="right"), len(cats) - 1))
+        return cats[k], u
 
     def answer(
         self,
         s: Session,
         col: int,
-        mode: str,
-        value: str | None = None,
-        max_sweeps: int = DEFAULT_MAX_SWEEPS,
+        max_steps: int = DEFAULT_MAX_STEPS,
         empirical_n: int = DEFAULT_EMPIRICAL_N,
-        tol: float = DEFAULT_TOL,
     ) -> Iterator[dict]:
         """Validate, then return a generator streaming animation frames.
 
@@ -476,31 +536,21 @@ class Engine:
             raise AnswerError("this column has no learned tree in the model")
         if any(o["column"] == col for o in s.observed):
             raise AnswerError("this item has already been answered and is clamped")
-        max_sweeps = max(0, min(int(max_sweeps), MAX_SWEEPS_LIMIT))
+        max_steps = max(0, min(int(max_steps), MAX_STEPS_LIMIT))
         empirical_n = max(1, min(int(empirical_n), 1000))
-        tol = max(0.0, float(tol))
-        if mode == "choose" and value not in model.variables[col].categories:
-            raise AnswerError(
-                f"{value!r} is not a legal response for "
-                f"{model.variables[col].variable}"
-            )
-        if mode not in ("sample", "map", "choose"):
-            raise AnswerError(f"unknown mode {mode!r}")
         if s.lock.locked():
-            raise AnswerError("this session is still relaxing the previous answer")
-        return self._run(s, col, mode, value, max_sweeps, empirical_n, tol)
+            raise AnswerError("this session is still propagating the previous answer")
+        return self._run(s, col, max_steps, empirical_n)
 
-    def _frame(
-        self, s: Session, before: list[dict], index: int, phase: str,
-        sweep: int, summary: dict, seconds: float,
-    ) -> dict:
+    def _frame(self, s: Session, before: list[dict], index: int, phase: str,
+               step: int, summary: dict, seconds: float) -> dict:
         tv = tv_array(s.psi, before)
         changed = np.flatnonzero(tv > CHANGE_EPS)
         return {
             "type": "frame",
             "frame": index,
             "phase": phase,
-            "sweep": sweep,
+            "step": step,
             "seconds": round(seconds, 4),
             "summary": summary,
             "tv": [round(float(x), 6) for x in tv],
@@ -510,12 +560,35 @@ class Engine:
             },
         }
 
-    def _run(self, s, col, mode, value, max_sweeps, empirical_n, tol):
+    def _steps(self, s: Session, max_steps: int, empirical_n: int):
+        """Yield (summary, seconds) for each wave / finite-n sweep."""
+        state = s.state
+        for step in range(1, max_steps + 1):
+            if s.dynamics == "propagation":
+                if state.pending_count == 0:
+                    return
+                t0 = time.perf_counter()
+                summary = dict(state.wave(threads=THREADS))
+            else:
+                t0 = time.perf_counter()
+                summary = dict(
+                    state.sweep(
+                        n=empirical_n,
+                        event=s.dynamics,
+                        seed=s.seed,
+                        response_scale=RESPONSE_SCALE,
+                        threads=THREADS,
+                        random_permutation=False,
+                    )
+                )
+            yield step, summary, time.perf_counter() - t0
+
+    def _run(self, s: Session, col: int, max_steps: int, empirical_n: int):
         # The lock is taken inside the generator so that it is only ever held
         # while the generator is actually running (and released by finally).
         if not s.lock.acquire(blocking=False):
             yield {"type": "error",
-                   "detail": "this session is still relaxing the previous answer"}
+                   "detail": "this session is still propagating the previous answer"}
             return
         model = self.model
         try:
@@ -524,7 +597,7 @@ class Engine:
                 yield {"type": "error", "detail": "this item is already clamped"}
                 return
             try:
-                sigma, extra = self._choose_value(s, col, mode, value)
+                sigma, u = self._draw(s, col)
             except AnswerError as exc:
                 yield {"type": "error", "detail": str(exc)}
                 return
@@ -534,64 +607,93 @@ class Engine:
                 "question": qnum,
                 "column": col,
                 "variable": model.variables[col].variable,
-                "mode": mode,
                 "value": sigma,
+                "u": u,
                 "seed": s.seed,
+                "dynamics": s.dynamics,
                 "p_before": model.encode_one(col, s.psi[col]),
-                **extra,
             }
 
-            before = s.psi
+            start = s.psi
             t0 = time.perf_counter()
-            h = dict(
-                s.state.hard_observe(
-                    source=col,
-                    value=sigma,
-                    response_scale=RESPONSE_SCALE,
-                    threads=THREADS,
-                    clamp=True,
-                )
-            )
+            if s.dynamics == "propagation":
+                h = dict(s.state.hard_observe(col, sigma, clamp=True,
+                                              threads=THREADS))
+            else:
+                h = dict(s.state.hard_observe(source=col, value=sigma,
+                                              response_scale=RESPONSE_SCALE,
+                                              threads=THREADS, clamp=True))
             sec = time.perf_counter() - t0
             s.psi = snapshot(s.state)
-            record = {"column": col, "variable": model.variables[col].variable,
-                      "value": sigma, "mode": mode, "question": qnum, **extra}
-            s.observed.append(record)
+            s.observed.append({"column": col,
+                               "variable": model.variables[col].variable,
+                               "value": sigma, "question": qnum, "u": u})
             s.log.append({"question": qnum, "phase": "hard_observation",
-                          "sweep": 0, "column": col, "value": sigma,
-                          "mode": mode, "seconds": sec, **h})
-            yield self._frame(s, before, 1, "hard_observation", 0, h, sec)
+                          "step": 0, "column": col, "value": sigma,
+                          "seconds": sec, **h})
+            yield self._frame(s, start, 1, "hard_observation", 0, h, sec)
 
-            stop = "max_sweeps"
-            for sweep in range(1, max_sweeps + 1):
-                yield {"type": "progress", "sweep": sweep, "of": max_sweeps}
+            steps_run = 0
+            for step, summary, sec in self._steps(s, max_steps, empirical_n):
+                yield {"type": "progress", "step": step, "of": max_steps}
                 prev = s.psi
-                t0 = time.perf_counter()
-                summary = dict(
-                    s.state.sweep(
-                        n=empirical_n,
-                        event="mode",
-                        seed=s.seed,
-                        response_scale=RESPONSE_SCALE,
-                        threads=THREADS,
-                        random_permutation=False,
-                    )
-                )
-                sec = time.perf_counter() - t0
                 s.psi = snapshot(s.state)
-                s.log.append({"question": qnum, "phase": "relaxation",
-                              "sweep": sweep, "column": col, "value": sigma,
-                              "mode": mode, "seconds": sec, **summary})
-                yield self._frame(s, prev, sweep + 1, "relaxation", sweep, summary, sec)
+                steps_run = step
+                s.log.append({"question": qnum,
+                              "phase": "wave" if s.dynamics == "propagation"
+                              else "sweep",
+                              "step": step, "column": col, "value": sigma,
+                              "seconds": sec, **summary})
+                yield self._frame(s, prev, step + 1,
+                                  "wave" if s.dynamics == "propagation" else "sweep",
+                                  step, summary, sec)
                 s.touch()
-                if summary.get("mean_tv", 1.0) < tol:
-                    stop = "tolerance"
-                    break
 
+            residual = 0.0
+            if s.dynamics == "propagation":
+                residual = sum(
+                    0.5 * sum(abs(x) for x in d.values())
+                    for d in s.state.pending().values())
+                if s.state.pending_count:
+                    stop = "max_steps"
+                    # The wave train of this answer ends here. Undamped
+                    # waves at response scale 1 need not die out, so the
+                    # remaining deltas are dropped (and reported) rather
+                    # than leaking into the next answer's waves.
+                    s.state.discard_pending()
+                else:
+                    stop = "settled"
+            else:
+                stop = "max_steps"
+
+            # Statistics use the same 1e-6-rounded arrays the browser receives,
+            # so the saved numbers equal the live counter exactly.
+            after_enc = model.encode(s.psi)
+            before_enc = model.encode(start)
+            tv = np.array([0.5 * sum(abs(x - y) for x, y in zip(a, b))
+                           for a, b in zip(after_enc, before_enc)])
+            stats = change_stats(tv, self.learned,
+                                 {o["column"] for o in s.observed})
+            entry = {
+                "question": qnum,
+                "column": col,
+                "variable": model.variables[col].variable,
+                "value": sigma,
+                "steps": steps_run,
+                "stop": stop,
+                "residual_pending_tv": residual,
+                "stats": stats,
+                "tv": [round(float(x), 6) for x in tv],
+                "psi": after_enc,
+            }
+            s.history.append(entry)
             yield {
                 "type": "done",
                 "question": qnum,
                 "stop": stop,
+                "steps": steps_run,
+                "residual_pending_tv": residual,
+                "stats": stats,
                 "clamped_count": int(s.state.clamped_count),
             }
         finally:

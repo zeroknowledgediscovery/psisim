@@ -9,7 +9,7 @@ on:
 jobs:
   build-bindings:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +23,7 @@ jobs:
       - name: Build standalone bindings
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --target predict_distribution qdistance psisim_graph -j "$(nproc)"
+          cmake --build build --target predict_distribution qdistance psisim_dynamics -j "$(nproc)"
 
       - name: Import bindings
         env:
@@ -32,14 +32,24 @@ jobs:
           python3 - <<'PY'
           import predict_distribution
           import qdistance
-          import psisim_graph
+          import psisim_dynamics
           print("predict_distribution:", predict_distribution.__file__)
           print("qdistance:", qdistance.__file__)
-          print("psisim_graph:", psisim_graph.__file__)
+          print("psisim_dynamics:", psisim_dynamics.__file__)
           PY
 
       - name: Compile Python sources
-        run: python3 -m compileall -q applications/psisimulation webapp
+        run: python3 -m compileall -q applications/psisimulation webapp tests
 
       - name: Check webapp client syntax
         run: node --check webapp/static/app.js
+
+      - name: Fetch GSS 2018 model
+        run: python3 applications/psisimulation/fetch_model.py gss/gss_2018
+
+      - name: Propagation dynamics regression tests
+        run: python3 tests/test_propagation_dynamics.py
+
+      - name: Webapp engine smoke test
+        working-directory: webapp
+        run: python3 smoke_test.py

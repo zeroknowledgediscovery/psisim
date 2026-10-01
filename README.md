@@ -53,7 +53,10 @@ applications/psisimulation/
 bindings/
     predict_distribution_py.cpp
     qdistance_py.cpp
-    psisim_graph_py.cpp        # PsiSim-owned; not synced from LSM
+    psisim_dynamics_py.cpp     # PsiSim-owned; not synced from LSM
+
+tests/
+    test_propagation_dynamics.py
 
 webapp/                        # interactive GSS 2018 simulation (see webapp/README.md)
     server.py
@@ -81,9 +84,12 @@ The native runtime was vendored from
 in `LSM_RUNTIME_SOURCE_COMMIT`.  The application snapshot is independently
 recorded in `PSISIM_SOURCE_COMMIT`.
 
-The interactive webapp in `webapp/` drives the same resident
-`CenteredLdpPsiState` through `hard_observe` and `sweep` and animates the
-streamed snapshots; see [`webapp/README.md`](webapp/README.md).
+The interactive webapp in `webapp/` uses propagation-only centered dynamics
+(`bindings/psisim_dynamics_py.cpp`): only an answer moves the state, and each
+wave propagates just the change induced by the previous wave, so $\Psi_0$ is
+stationary. The finite-$n$ `mode`/`sample` sweeps below remain available as an
+optional finite-sample / LDP experiment; see
+[`webapp/README.md`](webapp/README.md).
 
 ---
 
@@ -1012,8 +1018,30 @@ and the state moves.
 Therefore $\Psi_0$ need not be a fixed point of the finite-$n$ mode
 dynamics.
 
-This is intentional.  The finite empirical realization is the event that
-drives the centered response.
+The finite empirical realization is the event that drives the centered
+response.  Because it injects a new finite-$n$ perturbation at every variable
+(quantizing $p_i$ onto the $1/n$ grid), finite-$n$ `mode` / `sample` sweeps
+are a separate finite-sample / LDP experiment.  They are **not** passive
+relaxation and are not the default Psi dynamics.
+
+### 13.3 Default Psi dynamics: propagation only
+
+The default dynamics (used by the webapp, `bindings/psisim_dynamics_py.cpp`)
+obey
+
+```math
+\text{no external intervention} \;\Rightarrow\; \text{no motion},
+\qquad
+\Psi_0 \rightarrow \Psi_0 \text{ exactly}.
+```
+
+A hard observation $X_i=\sigma$ creates $\Delta_i^{(0)}=\delta_\sigma-p_i$,
+which is propagated once through the centered kernels (wave 0, identical to
+`hard_observe`).  The change actually induced in each target,
+$\Delta_j^{(1)}=p_j^{\text{after}}-p_j^{\text{before}}$, and only that
+change, is propagated in the next wave, and so on; clamped coordinates are
+never targets.  See `webapp_instruction.md` section 8 and
+`tests/test_propagation_dynamics.py`.
 
 ---
 
@@ -1386,7 +1414,7 @@ cmake -S . -B build-tests -G Ninja \
   -DLSM_BUILD_PYTHON_BINDINGS=ON
 
 cmake --build build-tests \
-  --target predict_distribution qdistance psisim_graph \
+  --target predict_distribution qdistance psisim_dynamics \
   -j "$(nproc)"
 ```
 
@@ -1395,7 +1423,7 @@ The extensions are written to
 ```text
 bin/predict_distribution*.so
 bin/qdistance*.so
-bin/psisim_graph*.so      # learned dependency graph, used by the webapp
+bin/psisim_dynamics*.so   # dependency graph + propagation-only dynamics (webapp)
 ```
 
 and the PsiSim Python scripts automatically prepend `bin/` to their import

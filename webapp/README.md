@@ -5,55 +5,69 @@ model of linked opinions, implementing [`webapp_instruction.md`](../webapp_instr
 
 The state is the full distributional row
 $\Psi=(p_1,\ldots,p_d)$, one categorical response distribution per modelled
-GSS item. Answering an item drops a stone into the system:
+GSS item. It starts at the empty state $\Psi_0$ and, under the default
+dynamics, **does not move until a topic is answered**. Choosing a topic asks
+it immediately: an answer $\sigma\sim p_i$ is drawn from its current
+distribution and dropped into the system like a stone into water.
 
 | frame | what is shown | native call |
 | --- | --- | --- |
 | 0 | state immediately before the answer | — |
-| 1 | the **splash**: immediate centered hard response | `state.hard_observe(source, value, response_scale=1.0, clamp=True)` |
-| 2.. | the **ripples**: relaxation sweeps | `state.sweep(n=10, event="mode", seed=session_seed, response_scale=1.0, random_permutation=False)` |
+| 1 | wave 0, the **splash**: $\Delta_i=\delta_\sigma-p_i$ propagated to the topics that depend on $i$ | `PropagationPsiState.hard_observe(i, sigma, clamp=True)` |
+| 2.. | waves 1.., the **ripples**: each wave propagates only the change it newly induced | `PropagationPsiState.wave()` |
 
-Up to five sweeps are run per answer (configurable up to ten), stopping early
-when the native `mean_tv` falls below a tolerance (default `1e-3`). The next
-question is asked in the new state, so the trajectory is history dependent.
+Each wave uses the centered hard-response kernels of the vendored runtime,
+$K_{j\leftarrow i}(\cdot\mid s)=\phi_j(x_\varnothing, X_i=s)$, at response
+scale 1 with simplex projection; clamped topics are never modified. A wave
+with nothing pending is the identity, so $\Psi_0$ is exactly stationary. See
+section 8 of the instructions and `tests/test_propagation_dynamics.py`.
 
-All mathematics runs in the vendored native runtime. The browser only renders
-snapshots streamed by the server; it never recomputes PsiSim dynamics.
+Up to five waves run per answer (configurable up to 20). If change is still
+pending after the last wave it is dropped and its size is reported, so one
+answer's waves never leak into the next answer's.
+
+The finite-$n$ sweeps of the vendored `CenteredLdpPsiState`
+(`event="mode"` / `"sample"`) are still available as an **optional session
+type** (New session → dynamics), labelled as a finite-sample / LDP
+experiment. They inject a new perturbation at every variable on every sweep
+and move $\Psi_0$ without any answer, so they are never the default.
+
+All mathematics runs in native code; the browser only renders snapshots.
 
 ## What the screen shows
 
+- **Live counter** — how many other topics the current answer has moved, how
+  many by more than 0.01, and the mean shift (TV), updated wave by wave.
 - **Field** — one dot per model column, laid out from the learned dependency
   graph (an edge $i\to j$ exists when the native tree for $j$ splits on $i$).
-  Colour is the total-variation distance of each item's current distribution
-  from $\Psi_0$; amber dots are answered and clamped. During playback, a halo
-  marks how much each item changed in that frame (native snapshot TV), the
-  answered item's learned links light up on the splash, and decorative rings
-  fade with the frame's `mean_tv`. The layout is for readability only: screen
-  distance is not a propagation time.
-- **Search** — by variable name, label, question text or answer text.
-- **Question card** — question text, variable name, native column, current
-  $p_i$ with every legal category (from the native source map), the $\Psi_0$
-  value as a tick, and whether the item is clamped.
-- **Response modes**
-  - *Simulate response* (default): $\sigma\sim p_i$ drawn on the server with a
-    per-session seeded `numpy` generator (reproducible from the session seed;
-    the uniform draw `u` is shown and exported).
-  - *Most likely*: deterministic MAP, $\sigma=\arg\max_s p_i(s)$.
-  - *Choose response*: force an answer (intervention).
-  All three use the same `hard_observe(..., clamp=True)`.
-- **Timeline** — Before / Splash / Sweep k frames with `mean_tv`, replay, and
-  the largest movers of each frame.
-- **Export** — JSON with the seed, answers, every native step summary and the
-  native `hard_row()`.
+  Colour is each topic's change caused by the current answer (log scale, so
+  small widespread shifts are visible); a toggle switches to change since
+  $\Psi_0$. Amber dots are answered and clamped. During playback a halo marks
+  each topic's change in that wave, links light up from the topics that
+  changed in the previous wave, and topics reached for the first time are
+  outlined. The layout is for readability only: screen distance is not a
+  propagation time.
+- **Wave strip** — Before / Splash / Wave k, with how many topics have been
+  reached so far and how many were newly reached; replay.
+- **Ψ change map** — one row per answer, one column per modelled topic (same
+  order in every row), brightness = how far that answer moved the topic, plus
+  a row for the total change since $\Psi_0$. Click a cell to inspect.
+- **Largest shifts** — the topics this answer moved most, with the change in
+  their most likely response.
+- **Topic card** — question text, current distribution with the $\Psi_0$
+  value as a tick, and a stacked bar of the topic's distribution after every
+  answer, so topics that were never asked visibly drift.
+- **Export** — JSON with the dynamics, seed, answers (with the uniform draw
+  `u`), per-answer movement statistics and every native step summary.
 
-### A caveat the UI states explicitly
+### Known behaviour of the undamped waves
 
-$\Psi_0$ is not stationary under the finite-$n$ (`n=10`) mode sweeps: sweeping
-from $\Psi_0$ **without any answer** moves the state by mean TV ≈ 0.11, 0.045,
-0.024 over the first three sweeps — the same magnitudes seen after a first
-answer. The relaxation frames therefore mix the answer's response with the
-model's intrinsic relaxation; the splash frame is the answer's direct effect.
-The timeline shows a note to that effect on every relaxation frame.
+At response scale 1 without damping, the waves do not die out on GSS 2018:
+the pending perturbation shrinks for about four waves and then grows
+(~1.3x per wave) until simplex projection saturates it. Unasked topics can be
+pushed to point masses (e.g. after `abany = yes`, `absingle` goes from 0.56
+to 1.00). The UI reports the dropped remainder after each answer. Damping /
+response scale is an open modelling decision.
 
 ## Run locally
 
@@ -63,7 +77,7 @@ From the repository root:
 python3 -m pip install -r applications/psisimulation/requirements.txt -r webapp/requirements.txt
 
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target predict_distribution psisim_graph -j "$(nproc)"
+cmake --build build --target predict_distribution psisim_dynamics -j "$(nproc)"
 
 python3 applications/psisimulation/fetch_model.py gss/gss_2018   # once
 python3 webapp/server.py --host 127.0.0.1 --port 8000
@@ -71,14 +85,15 @@ python3 webapp/server.py --host 127.0.0.1 --port 8000
 
 Open <http://127.0.0.1:8000/>. Startup takes ~5–25 s (the first start also
 computes and caches the graph layout). Creating a session builds a resident
-`CenteredLdpPsiState` (~5 s); one warm spare is kept ready so the next session
-starts immediately. A first sweep in a session takes ~9 s while the response
-kernel cache warms, later sweeps ~3 s on 4 cores; frames stream as they finish.
+native state (~3–5 s); one warm spare default state is kept ready so the next
+session starts immediately. A wave takes 0.01–2 s on 4 cores (the first waves
+of a session warm the kernel cache); frames stream as they finish.
 
-Smoke test (needs the bindings and the model):
+Tests (need the bindings and the model):
 
 ```bash
-cd webapp && python3 smoke_test.py
+python3 tests/test_propagation_dynamics.py   # dynamics invariants, ~3 min
+cd webapp && python3 smoke_test.py           # engine end to end
 ```
 
 ## Deployment
@@ -109,9 +124,9 @@ without it.
 | method | path | body / result |
 | --- | --- | --- |
 | `GET` | `/api/model` | variables (column, name, label, categories, degrees), edges, layout, $\Psi_0$ |
-| `POST` | `/api/session` | `{seed?}` → `{session_id, seed, psi, observed}` |
-| `GET` | `/api/session/{id}` | current `psi` and answers |
-| `POST` | `/api/session/{id}/answer` | `{column, mode: sample\|map\|choose, value?, max_sweeps?, tol?, empirical_n?}` → NDJSON stream of `answer`, `frame`, `progress`, `done` events |
+| `POST` | `/api/session` | `{seed?, dynamics?: propagation\|mode\|sample}` → `{session_id, seed, dynamics, psi, observed, history}` |
+| `GET` | `/api/session/{id}` | current `psi`, answers and per-answer change history |
+| `POST` | `/api/session/{id}/answer` | `{column, max_steps?, empirical_n?}` → draws $\sigma\sim p_i$ and streams NDJSON `answer`, `frame`, `progress`, `done` events |
 | `GET` | `/api/session/{id}/export` | reproducibility record |
 | `DELETE` | `/api/session/{id}` | drop the resident state |
 
@@ -123,13 +138,16 @@ changed.
 ## Files
 
 - `server.py` — FastAPI app and NDJSON streaming.
-- `engine.py` — model loading, dependency graph, layout, resident sessions.
+- `engine.py` — model loading, dependency graph, layout, resident sessions,
+  propagation waves (default) and optional finite-n sweeps.
 - `build_gss_metadata.py` — regenerates `assets/gss/gss_2018_map.csv`
   (see `assets/gss/PROVENANCE.md`).
 - `static/` — the single-page client (no build step, no external assets).
-- `../bindings/psisim_graph_py.cpp` — PsiSim-owned binding exposing which
-  columns each native tree uses. It is not part of the vendored LSM runtime,
-  so `scripts/sync_lsm_runtime.sh` never overwrites it.
+- `../bindings/psisim_dynamics_py.cpp` — PsiSim-owned binding: the learned
+  dependency graph and `PropagationPsiState`. It is not part of the vendored
+  LSM runtime, so `scripts/sync_lsm_runtime.sh` never overwrites it.
+- `../tests/test_propagation_dynamics.py` — regression tests of the default
+  dynamics on the real model.
 
 `qdistance` is not used yet; it is the intended tool for later comparisons of
 endpoints, question orders and counterfactual branches.

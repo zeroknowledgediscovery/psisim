@@ -6,9 +6,11 @@ Run from the repository root:
   python3 webapp/server.py --host 127.0.0.1 --port 8000
 
 The model is resolved (and, if needed, downloaded) once at startup. Every
-browser session owns one resident native ``CenteredLdpPsiState``; answers are
-applied with ``hard_observe(..., clamp=True)`` followed by centered mode
-sweeps, and every snapshot is streamed to the browser as one NDJSON line.
+browser session owns one resident native state (by default a propagation-only
+``PropagationPsiState``); an answer is
+applied with ``hard_observe(..., clamp=True)`` and its perturbation is then
+propagated wave by wave (only newly induced deltas); every snapshot is
+streamed to the browser as one NDJSON line.
 """
 from __future__ import annotations
 
@@ -30,15 +32,13 @@ STATIC = HERE / "static"
 
 class NewSession(BaseModel):
     seed: int | None = Field(default=None, ge=0)
+    dynamics: str = eng.DEFAULT_DYNAMICS
 
 
 class Answer(BaseModel):
     column: int
-    mode: str = "sample"  # sample | map | choose
-    value: str | None = None
-    max_sweeps: int = eng.DEFAULT_MAX_SWEEPS
-    empirical_n: int = eng.DEFAULT_EMPIRICAL_N
-    tol: float = eng.DEFAULT_TOL
+    max_steps: int = eng.DEFAULT_MAX_STEPS
+    empirical_n: int = eng.DEFAULT_EMPIRICAL_N  # finite-n dynamics only
 
 
 def create_app(model: eng.Model | None = None) -> FastAPI:
@@ -75,8 +75,11 @@ def create_app(model: eng.Model | None = None) -> FastAPI:
 
     @app.post("/api/session")
     def new_session(body: NewSession | None = None):
+        body = body or NewSession()
         try:
-            s = engine.create(seed=body.seed if body else None)
+            s = engine.create(seed=body.seed, dynamics=body.dynamics)
+        except eng.AnswerError as exc:
+            raise HTTPException(422, str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
         return engine.session_view(s)
@@ -107,11 +110,8 @@ def create_app(model: eng.Model | None = None) -> FastAPI:
             frames = engine.answer(
                 s,
                 body.column,
-                body.mode,
-                value=body.value,
-                max_sweeps=body.max_sweeps,
+                max_steps=body.max_steps,
                 empirical_n=body.empirical_n,
-                tol=body.tol,
             )
         except eng.AnswerError as exc:
             raise HTTPException(409, str(exc)) from exc
