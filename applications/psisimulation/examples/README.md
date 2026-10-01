@@ -360,7 +360,7 @@ for this hard observation.
 For a hard answer, the source event TV is
 
 ```math
-\operatorname{TV}
+\mathrm{TV}
 \left(
 p_0^0,
 \delta_{\mathrm{working\ fulltime}}
@@ -628,13 +628,13 @@ for $r=1,\ldots,5$.
 For every sweep the script records
 
 ```math
-\operatorname{meanTV}
+\mathrm{meanTV}
 ```
 
 and
 
 ```math
-\operatorname{maxTV}
+\mathrm{maxTV}
 ```
 
 between the state before the full sweep and the state after the full sweep.
@@ -1216,13 +1216,13 @@ For a relaxation sweep,
 The most important convergence quantities are
 
 ```math
-\operatorname{meanTV}
+\mathrm{meanTV}
 ```
 
 and
 
 ```math
-\operatorname{maxTV}.
+\mathrm{maxTV}.
 ```
 
 If five sweeps are insufficient, continue the trajectory rather than calling
@@ -1410,7 +1410,7 @@ Then
 d_j
 =
 \sqrt{
-\operatorname{JS}_2
+\mathrm{JS}_2
 (
 P_j^x,
 P_j^y
