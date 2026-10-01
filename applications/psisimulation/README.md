@@ -266,9 +266,9 @@ A sweep returns:
 For a deterministic mode simulation, a numerical fixed point is indicated by
 
 ```math
-\operatorname{meanTV}\to0,
+\mathrm{meanTV}\to0,
 \qquad
-\operatorname{maxTV}\to0
+\mathrm{maxTV}\to0
 ```
 
 During development on GSS-2018, actual-row trajectories showed a clean
@@ -621,7 +621,7 @@ thresholds are configurable.
 A cluster representative is its **medoid**:
 
 ```math
-\operatorname*{arg\,min}_{x\in C}
+\mathrm{argmin}_{x\in C}
 \frac{1}{|C|}
 \sum_{y\in C}
 d_Q(x,y)
