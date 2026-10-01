@@ -1,3 +1,12 @@
+> **Canonical mathematical specification.** The repository-root `README.md`
+> contains the complete current mathematical and conceptual definition of the
+> native LSM model, hard and soft inference semantics, centered response kernel,
+> finite-empirical-event dynamics, simplex projection, clamping, sequential
+> sweeps, convergence diagnostics, qdistance geometry, clustering, and
+> interpretation boundaries.  The fully worked two-question GSS-2018 example is
+> in `applications/psisimulation/examples/README.md`.  This application-level
+> README is retained as the operational/manual reference.
+
 # Psi simulation: intrinsic LSM dynamics
 
 `applications/psisimulation` is a self-contained experimental workbench for
