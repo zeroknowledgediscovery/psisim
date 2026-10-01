@@ -28,23 +28,24 @@ Let the model have coordinates `i = 1,...,d`, with categorical alphabet
 `Sigma_i`. The learned native LSM contains one predictor per modeled
 coordinate,
 
-```text
-phi_i(x_-i) -> distribution on Sigma_i.
+```math
+\phi_i(x_{-i}) \longmapsto \Delta(\Sigma_i)
 ```
 
 A dynamical state is a probability-valued row
 
-```text
-Psi = (p_1, p_2, ..., p_d),
+```math
+\Psi=(p_1,p_2,\ldots,p_d)
 ```
 
 where `p_i` is a categorical distribution on `Sigma_i`.
 
 For the all-missing hard row `empty`, define
 
-```text
-p_i^0 = phi_i(empty)
-Psi0  = (p_1^0, ..., p_d^0).
+```math
+p_i^0=\phi_i(x_\varnothing),
+\qquad
+\Psi_0=(p_1^0,\ldots,p_d^0).
 ```
 
 `Psi0` is therefore obtained directly from the learned LSM; no survey data row
@@ -55,16 +56,22 @@ is needed.
 For a source coordinate `i`, a target coordinate `j != i`, and a hard
 symbol `sigma in Sigma_i`, define the one-coordinate hard-response kernel
 
-```text
-K_{j<-i}(. | sigma) = phi_j(x_{i=sigma}),
+```math
+K_{j\leftarrow i}(\cdot\mid\sigma)
+=
+\phi_j\!\left(x^{(i=\sigma)}\right)
 ```
 
 where all coordinates other than `i` are missing.
 
 A tempting identity is
 
-```text
-sum_sigma p_i(sigma) K_{j<-i}(. | sigma) = p_j.
+```math
+\sum_{\sigma\in\Sigma_i}
+p_i(\sigma)
+K_{j\leftarrow i}(\cdot\mid\sigma)
+=
+p_j
 ```
 
 This would be the ordinary tower identity if all of these quantities were
@@ -83,27 +90,34 @@ Instead it propagates only the response to a change in the source marginal.
 Suppose the current source marginal is `p_i` and an empirical realization is
 `nu_i`. Define
 
-```text
-delta_i = nu_i - p_i.
+```math
+\delta_i=\nu_i-p_i
 ```
 
 The source coordinate becomes
 
-```text
-p_i' = nu_i.
+```math
+p_i^{+}=\nu_i
 ```
 
 Every dependent target is updated by
 
-```text
-p_j' = p_j
-       + sum_sigma delta_i(sigma) K_{j<-i}(. | sigma).
+```math
+p_j^{+}
+=
+p_j
++
+\sum_{\sigma\in\Sigma_i}
+\delta_i(\sigma)
+K_{j\leftarrow i}(\cdot\mid\sigma)
 ```
 
 Equivalently,
 
-```text
-Delta p_j = K_{j<-i} (nu_i - p_i).
+```math
+\Delta p_j
+=
+K_{j\leftarrow i}(\nu_i-p_i)
 ```
 
 If the raw response leaves the categorical probability simplex, the
@@ -112,8 +126,12 @@ projection count.
 
 The crucial property is immediate:
 
-```text
-nu_i = p_i  =>  delta_i = 0  =>  Psi' = Psi.
+```math
+\nu_i=p_i
+\Longrightarrow
+\delta_i=0
+\Longrightarrow
+\Psi^{+}=\Psi
 ```
 
 Thus a zero-action event is exactly the identity without requiring the tower
@@ -125,14 +143,14 @@ For finite empirical size `n`, an empirical type `nu_i` generated from
 `p_i` has the usual multinomial/large-deviation interpretation. Its Sanov
 rate is
 
-```text
-D(nu_i || p_i),
+```math
+D(\nu_i\Vert p_i)
 ```
 
 and the implementation reports
 
-```text
-nD = n * D(nu_i || p_i).
+```math
+nD=n\,D(\nu_i\Vert p_i)
 ```
 
 Three event modes are available in the resident C++ state:
@@ -157,8 +175,8 @@ There are two distinct statements that should not be conflated.
 
 For every state, and therefore in particular for `Psi0`,
 
-```text
-T_zero(Psi) = Psi.
+```math
+T_{\mathrm{zero}}(\Psi)=\Psi
 ```
 
 This is exact by construction of the centered response.
@@ -177,21 +195,22 @@ the event that drives the dynamics.
 
 A survey answer is represented as a hard observation
 
-```text
-X_i = sigma.
+```math
+X_i=\sigma
 ```
 
 The implementation sets
 
-```text
-nu_i = delta_sigma
+```math
+\nu_i=\delta_\sigma
 ```
 
 and immediately applies the same centered response
 
-```text
-Delta p_j =
-    K_{j<-i} (delta_sigma - p_i).
+```math
+\Delta p_j
+=
+K_{j\leftarrow i}(\delta_\sigma-p_i)
 ```
 
 The Python API is
@@ -212,15 +231,21 @@ not a temporary perturbation.
 
 This produces the progressive-choice sequence
 
-```text
-Psi0
-  -> observe X_i = sigma
-  -> immediate global response
-  -> relax toward a new equilibrium
-  -> observe X_k = tau
-  -> immediate global response
-  -> relax again
-  -> ...
+```math
+\Psi_0
+\longrightarrow
+\bigl[X_i=\sigma\bigr]
+\longrightarrow
+\text{response}
+\longrightarrow
+\text{relaxation}
+\longrightarrow
+\bigl[X_k=\tau\bigr]
+\longrightarrow
+\text{response}
+\longrightarrow
+\text{relaxation}
+\longrightarrow\cdots
 ```
 
 This is the principal simulation implemented by
@@ -240,9 +265,10 @@ A sweep returns:
 
 For a deterministic mode simulation, a numerical fixed point is indicated by
 
-```text
-mean_tv -> 0
-max_tv  -> 0.
+```math
+\operatorname{meanTV}\to0,
+\qquad
+\operatorname{maxTV}\to0
 ```
 
 During development on GSS-2018, actual-row trajectories showed a clean
@@ -459,8 +485,11 @@ every relaxation sweep.
 `final_hard_row.csv` is the coordinatewise MAP realization of the terminal
 probability state,
 
-```text
-x_i^* = argmax_sigma p_i^*(sigma).
+```math
+x_i^*
+=
+\arg\max_{\sigma\in\Sigma_i}
+p_i^*(\sigma)
 ```
 
 It is a convenient discrete representation of a near-equilibrium state; the
@@ -591,8 +620,11 @@ thresholds are configurable.
 
 A cluster representative is its **medoid**:
 
-```text
-argmin_{x in cluster} mean_{y in cluster} qdistance(x,y).
+```math
+\operatorname*{arg\,min}_{x\in C}
+\frac{1}{|C|}
+\sum_{y\in C}
+d_Q(x,y)
 ```
 
 Thus every reported representative is an actual hard equilibrium reached by
