@@ -53,21 +53,21 @@ bash applications/psisimulation/run_example.sh
 
 The example uses
 
-$
+$$
 n=10
-$
+$$
 
 for the finite empirical mode updates,
 
-$
+$$
 \alpha=1
-$
+$$
 
 for the centered response scale, and
 
-$
+$$
 \texttt{random\_permutation}=\texttt{False}
-$
+$$
 
 so every relaxation sweep uses the deterministic native tree order.
 
@@ -91,11 +91,11 @@ source_maps/
 Each learned target coordinate $j$ has a native tree implementing a
 categorical conditional predictor
 
-$
+$$
 \phi_j(x_{-j})
 =
 \Pr_{\mathrm{LSM}}(X_j=\cdot\mid x_{-j}).
-$
+$$
 
 The source maps define the legal raw categorical labels for each coordinate and
 their native integer encodings.
@@ -119,52 +119,52 @@ unless \`DTAG_MODEL_ROOT\` overrides the cache root.
 
 Let the GSS-2018 model contain learned coordinates
 
-$
+$$
 X_1,\ldots,X_d
-$
+$$
 
 with categorical alphabets
 
-$
+$$
 \Sigma_1,\ldots,\Sigma_d.
-$
+$$
 
 PsiSim does not evolve one categorical value per variable.  It evolves the
 probability-valued state
 
-$
+$$
 \Psi
 =
 (p_1,\ldots,p_d),
-$
+$$
 
 where
 
-$
+$$
 p_i\in\Delta(\Sigma_i).
-$
+$$
 
 Thus the dynamical state lives in
 
-$
+$$
 \prod_{i=1}^d\Delta(\Sigma_i).
-$
+$$
 
 For example, if one variable has categories
 
-$
+$$
 \Sigma_i
 =
 \{\text{yes},\text{no},\text{don't know}\},
-$
+$$
 
 then that coordinate of Psi might be
 
-$
+$$
 p_i
 =
 (0.61,0.34,0.05),
-$
+$$
 
 rather than a single hard symbol.
 
@@ -174,27 +174,27 @@ rather than a single hard symbol.
 
 The simulation first forms the all-missing hard row
 
-$
+$$
 x_\varnothing
 =
 (\varnothing,\ldots,\varnothing).
-$
+$$
 
 For every learned coordinate $i$,
 
-$
+$$
 p_i^0
 =
 \phi_i(x_\varnothing).
-$
+$$
 
 Therefore
 
-$
+$$
 \Psi_0
 =
 (p_1^0,\ldots,p_d^0).
-$
+$$
 
 In the code this is
 
@@ -225,31 +225,31 @@ the implementation.
 For source coordinate $i$, target coordinate $j$, and source symbol
 $\sigma\in\Sigma_i$, form the hard row
 
-$
+$$
 x^{(i=\sigma)}
-$
+$$
 
 whose only observed coordinate is
 
-$
+$$
 x_i=\sigma.
-$
+$$
 
 Every other coordinate is missing.
 
 Then
 
-$
+$$
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 \phi_j(x^{(i=\sigma)}).
-$
+$$
 
 The native runtime caches this distribution using the key
 
-$
+$$
 (i,j,\sigma).
-$
+$$
 
 A perturbation of source $i$ is propagated only to target trees $j$ whose
 learned tree actually uses $i$.
@@ -265,9 +265,9 @@ Let source coordinate $i=0$.
 
 Immediately before the first question its distribution is
 
-$
+$$
 p_0^0.
-$
+$$
 
 The answer
 
@@ -277,23 +277,23 @@ working fulltime
 
 is represented as the point mass
 
-$
+$$
 \nu_0
 =
 \delta_{\mathrm{working\ fulltime}}.
-$
+$$
 
 The centered source displacement is
 
-$
+$$
 \Delta_0
 =
 \nu_0-p_0^0.
-$
+$$
 
 Written componentwise,
 
-$
+$$
 \Delta_0(\sigma)
 =
 \mathbf 1
@@ -302,44 +302,44 @@ $
 \}
 -
 p_0^0(\sigma).
-$
+$$
 
 The source coordinate is hard-collapsed:
 
-$
+$$
 p_0^+
 =
 \delta_{\mathrm{working\ fulltime}}.
-$
+$$
 
 For every dependent target $j$, the immediate response is
 
-$
+$$
 r_{j\leftarrow 0}
 =
 \sum_{\sigma\in\Sigma_0}
 \Delta_0(\sigma)
 K_{j\leftarrow 0}(\cdot\mid\sigma).
-$
+$$
 
 With the default response scale $\alpha=1$,
 
-$
+$$
 \widetilde p_j^+
 =
 p_j^0+r_{j\leftarrow 0}.
-$
+$$
 
 If this candidate leaves the categorical simplex, it is projected back:
 
-$
+$$
 p_j^+
 =
 \Pi_{\Delta(\Sigma_j)}
 \left(
 \widetilde p_j^+
 \right).
-$
+$$
 
 All learned target coordinates whose trees do not use column 0 remain
 unchanged by this immediate response.
@@ -359,17 +359,17 @@ for this hard observation.
 
 For a hard answer, the source event TV is
 
-$
+$$
 \operatorname{TV}
 \left(
 p_0^0,
 \delta_{\mathrm{working\ fulltime}}
 \right).
-$
+$$
 
 The KL rate computed internally is
 
-$
+$$
 D
 \left(
 \delta_{\mathrm{working\ fulltime}}
@@ -379,7 +379,7 @@ p_0^0
 =
 -\log
 p_0^0(\mathrm{working\ fulltime}),
-$
+$$
 
 provided the chosen answer has positive model probability.
 
@@ -409,11 +409,11 @@ so the first answer becomes persistent evidence.
 
 From this point onward,
 
-$
+$$
 p_0
 =
 \delta_{\mathrm{working\ fulltime}}
-$
+$$
 
 through all later relaxation sweeps and after the second question.
 
@@ -437,65 +437,65 @@ Five deterministic finite-$n$ mode sweeps are now performed.
 
 The example uses
 
-$
+$$
 n=10.
-$
+$$
 
 For each non-clamped source coordinate $i$, suppose the current distribution
 at the moment that source is visited is
 
-$
+$$
 p_i.
-$
+$$
 
 PsiSim constructs the multinomial modal empirical type
 
-$
+$$
 \nu_i
 =
 \frac{c}{10},
-$
+$$
 
 where the integer counts satisfy
 
-$
+$$
 \sum_{\sigma\in\Sigma_i}c_\sigma=10.
-$
+$$
 
 The implementation obtains the global multinomial mode by assigning counts one
 at a time to the category maximizing
 
-$
+$$
 \frac{p_i(\sigma)}{c_\sigma+1}.
-$
+$$
 
 Because $n=10$, every component of $\nu_i$ is an integer multiple of
 
-$
+$$
 0.1.
-$
+$$
 
 This means that even a smooth probability vector such as
 
-$
+$$
 (0.63,0.24,0.13)
-$
+$$
 
 would typically be replaced by a nearby finite empirical type such as
 
-$
+$$
 (0.6,0.3,0.1),
-$
+$$
 
 depending on the exact multinomial mode.
 
 That finite empirical displacement
 
-$
+$$
 \Delta_i
 =
 \nu_i-p_i
-$
+$$
 
 is then propagated with the same centered response formula used for the hard
 observation.
@@ -506,13 +506,13 @@ observation.
 
 Suppose the learned source tree order is
 
-$
+$$
 i_1,i_2,\ldots,i_m.
-$
+$$
 
 One sweep is
 
-$
+$$
 S
 =
 T_{i_m}
@@ -520,7 +520,7 @@ T_{i_m}
 T_{i_2}
 \circ
 T_{i_1}.
-$
+$$
 
 The state used by $T_{i_2}$ is already the state produced by $T_{i_1}$.
 
@@ -529,9 +529,9 @@ beginning-of-sweep state and applying them simultaneously.
 
 This matters because generally
 
-$
+$$
 T_iT_j\neq T_jT_i.
-$
+$$
 
 The example sets
 
@@ -549,36 +549,36 @@ This makes the deterministic example reproducible.
 
 For each finite empirical event,
 
-$
+$$
 \nu_i,
-$
+$$
 
 the runtime reports
 
-$
+$$
 D(\nu_i\|p_i)
 =
 \sum_{\sigma:\nu_i(\sigma)>0}
 \nu_i(\sigma)
 \log
 \frac{\nu_i(\sigma)}{p_i(\sigma)}.
-$
+$$
 
 The logarithm is natural, so the quantity is in nats.
 
 For $n=10$, the event exponent is
 
-$
+$$
 10D(\nu_i\|p_i).
-$
+$$
 
 A complete sweep accumulates the source rates and reports
 
-$
+$$
 10
 \sum_{i\in\text{sweep}}
 D(\nu_i\|p_i).
-$
+$$
 
 This diagnostic quantifies how atypical the finite empirical events are
 relative to the current marginals.
@@ -592,7 +592,7 @@ the trajectory.
 
 After the first hard answer, the trajectory is
 
-$
+$$
 \Psi_{1,0}
 \rightarrow
 \Psi_{1,1}
@@ -604,38 +604,38 @@ $
 \Psi_{1,4}
 \rightarrow
 \Psi_{1,5},
-$
+$$
 
 where
 
-$
+$$
 \Psi_{1,0}
-$
+$$
 
 is the immediate post-answer state and
 
-$
+$$
 \Psi_{1,r}
 =
 S_{10}
 (
 \Psi_{1,r-1}
 )
-$
+$$
 
 for $r=1,\ldots,5$.
 
 For every sweep the script records
 
-$
+$$
 \operatorname{meanTV}
-$
+$$
 
 and
 
-$
+$$
 \operatorname{maxTV}
-$
+$$
 
 between the state before the full sweep and the state after the full sweep.
 
@@ -652,53 +652,53 @@ the residual diagnostics or tested by continuing the trajectory.
 
 After five relaxation sweeps, denote the current state by
 
-$
+$$
 \Psi_{1,5}.
-$
+$$
 
 Now source coordinate $i=3$ is hard-observed as
 
-$
+$$
 X_3=\text{yes}.
-$
+$$
 
 Let its pre-observation marginal be
 
-$
+$$
 p_3^{(1,5)}.
-$
+$$
 
 The imposed empirical distribution is
 
-$
+$$
 \nu_3
 =
 \delta_{\mathrm{yes}},
-$
+$$
 
 and the centered displacement is
 
-$
+$$
 \Delta_3
 =
 \delta_{\mathrm{yes}}
 -
 p_3^{(1,5)}.
-$
+$$
 
 For each dependent target $j$,
 
-$
+$$
 r_{j\leftarrow3}
 =
 \sum_{\sigma\in\Sigma_3}
 \Delta_3(\sigma)
 K_{j\leftarrow3}(\cdot\mid\sigma).
-$
+$$
 
 The target update is again
 
-$
+$$
 p_j^+
 =
 \Pi_{\Delta(\Sigma_j)}
@@ -707,23 +707,23 @@ p_j
 +
 r_{j\leftarrow3}
 \right].
-$
+$$
 
 At this point both observations are clamped:
 
-$
+$$
 p_0
 =
 \delta_{\mathrm{working\ fulltime}},
-$
+$$
 
 and
 
-$
+$$
 p_3
 =
 \delta_{\mathrm{yes}}.
-$
+$$
 
 No subsequent response is permitted to alter either clamped target.
 
@@ -737,7 +737,7 @@ already reached after the first answer and its five relaxation sweeps.
 
 The state now undergoes another five deterministic mode sweeps:
 
-$
+$$
 \Psi_{2,0}
 \rightarrow
 \Psi_{2,1}
@@ -745,19 +745,19 @@ $
 \cdots
 \rightarrow
 \Psi_{2,5}.
-$
+$$
 
 During these sweeps,
 
-$
+$$
 X_0=\text{working fulltime}
-$
+$$
 
 and
 
-$
+$$
 X_3=\text{yes}
-$
+$$
 
 remain fixed as persistent evidence.
 
@@ -766,11 +766,11 @@ response dynamics.
 
 The final probability-valued state is
 
-$
+$$
 \Psi_{\mathrm{final}}
 =
 \Psi_{2,5}.
-$
+$$
 
 ---
 
@@ -784,12 +784,12 @@ final_hard_row.csv
 
 with
 
-$
+$$
 x_i^\star
 =
 \arg\max_{\sigma\in\Sigma_i}
 p_i^{\mathrm{final}}(\sigma).
-$
+$$
 
 This hard row is useful for
 
@@ -800,15 +800,15 @@ This hard row is useful for
 
 But the simulation itself evolves
 
-$
+$$
 \Psi_{\mathrm{final}},
-$
+$$
 
 not merely
 
-$
+$$
 x^\star.
-$
+$$
 
 Two probability states can have the same MAP hard row while retaining
 different uncertainty distributions.
@@ -880,25 +880,25 @@ optionally assemble GIF
 
 Suppose an empirical event at source $i$ exactly equals its current marginal:
 
-$
+$$
 \nu_i=p_i.
-$
+$$
 
 Then
 
-$
+$$
 \Delta_i=0.
-$
+$$
 
 Therefore
 
-$
+$$
 \sum_\sigma
 \Delta_i(\sigma)
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 0
-$
+$$
 
 for every target $j$.
 
@@ -924,17 +924,17 @@ should therefore report numerical zero movement.
 
 The supplied sequence is
 
-$
+$$
 Q_1:
 X_0=\text{working fulltime},
-$
+$$
 
 then five sweeps, then
 
-$
+$$
 Q_2:
 X_3=\text{yes}.
-$
+$$
 
 This is not generally equivalent to reversing the questions.
 
@@ -942,31 +942,31 @@ The first answer changes many marginals.  The relaxation sweeps further change
 the state.  Therefore the source distribution at column 3 when the second
 question arrives is
 
-$
+$$
 p_3^{(1,5)},
-$
+$$
 
 not the original
 
-$
+$$
 p_3^0.
-$
+$$
 
 The second centered displacement is therefore
 
-$
+$$
 \delta_{\mathrm{yes}}
 -
 p_3^{(1,5)},
-$
+$$
 
 which can differ substantially from
 
-$
+$$
 \delta_{\mathrm{yes}}
 -
 p_3^0.
-$
+$$
 
 This makes question order a scientifically meaningful perturbation variable.
 
@@ -995,9 +995,9 @@ question is effectively applied near the first-answer fixed point.
 
 Thus the integer
 
-$
+$$
 s_q
-$
+$$
 
 after each question controls the separation of timescales between external
 interventions.
@@ -1016,9 +1016,9 @@ This can be used to study
 
 The default
 
-$
+$$
 n=10
-$
+$$
 
 sets the empirical resolution of the deterministic relaxation.
 
@@ -1030,23 +1030,23 @@ current marginal.
 
 Therefore the family of deterministic maps
 
-$
+$$
 S_n
-$
+$$
 
 depends on $n$.
 
 One should not assume that an endpoint found at
 
-$
+$$
 n=10
-$
+$$
 
 is invariant under
 
-$
+$$
 n=20,\quad50,\quad100.
-$
+$$
 
 A useful sensitivity analysis is to repeat the exact same question sequence
 over several $n$ values and compare
@@ -1063,13 +1063,13 @@ over several $n$ values and compare
 
 The example uses
 
-$
+$$
 \alpha=1.
-$
+$$
 
 In the general update,
 
-$
+$$
 p_j^+
 =
 \Pi_\Delta
@@ -1081,32 +1081,32 @@ p_j
 (\nu_i(\sigma)-p_i(\sigma))
 K_{j\leftarrow i}(\cdot\mid\sigma)
 \right].
-$
+$$
 
 Thus $\alpha$ scales propagation away from the source.
 
 At
 
-$
+$$
 \alpha=0,
-$
+$$
 
 the source itself changes to its empirical distribution but no dependent
 target responds.
 
 At
 
-$
+$$
 0<\alpha<1,
-$
+$$
 
 the propagated response is damped.
 
 At
 
-$
+$$
 \alpha>1,
-$
+$$
 
 the response is amplified and simplex projection may occur more frequently.
 
@@ -1215,15 +1215,15 @@ For a relaxation sweep,
 
 The most important convergence quantities are
 
-$
+$$
 \operatorname{meanTV}
-$
+$$
 
 and
 
-$
+$$
 \operatorname{maxTV}.
-$
+$$
 
 If five sweeps are insufficient, continue the trajectory rather than calling
 the final state an equilibrium solely because the script stopped.
@@ -1307,9 +1307,9 @@ Reverse columns 0 and 3 to test noncommutativity and path dependence.
 
 Run
 
-$
+$$
 s=0,1,2,5,10,20
-$
+$$
 
 sweeps between questions.
 
@@ -1317,9 +1317,9 @@ sweeps between questions.
 
 Run
 
-$
+$$
 n=5,10,20,50,100.
-$
+$$
 
 ### Stochastic test
 
@@ -1336,9 +1336,9 @@ distribution.
 
 Vary
 
-$
+$$
 \alpha
-$
+$$
 
 and inspect convergence and projection frequency.
 
@@ -1366,15 +1366,15 @@ endpoints using native qdistance.
 
 Thus the progressive example studies
 
-$
+$$
 \text{controlled intervention paths from }\Psi_0,
-$
+$$
 
 whereas equilibrium clustering studies
 
-$
+$$
 \text{population endpoint geometry from empirical initial conditions}.
-$
+$$
 
 They use the same core response operator but answer different questions.
 
@@ -1384,29 +1384,29 @@ They use the same core response operator but answer different questions.
 
 If two runs produce hard endpoints
 
-$
+$$
 x^\star
-$
+$$
 
 and
 
-$
+$$
 y^\star,
-$
+$$
 
 the native qdistance does not merely count unequal symbols.
 
 For each learned target $j$, compute
 
-$
+$$
 P_j^x=\phi_j(x^\star),
 \qquad
 P_j^y=\phi_j(y^\star).
-$
+$$
 
 Then
 
-$
+$$
 d_j
 =
 \sqrt{
@@ -1416,16 +1416,16 @@ P_j^x,
 P_j^y
 )
 }.
-$
+$$
 
 The global distance is
 
-$
+$$
 d_Q(x^\star,y^\star)
 =
 \frac1{|\mathcal T|}
 \sum_{j\in\mathcal T}d_j.
-$
+$$
 
 This compares the two rows through their induced learned conditional
 predictions across the model.
@@ -1463,21 +1463,21 @@ map which endpoint each trajectory approaches.
 
 The worked example does **not** require that
 
-$
+$$
 \{\phi_i\}
-$
+$$
 
 be exact conditionals of one known explicit joint distribution.
 
 It does not require
 
-$
+$$
 \sum_\sigma
 p_i(\sigma)
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 p_j.
-$
+$$
 
 It does not require detailed balance.
 
@@ -1579,7 +1579,7 @@ scientifically material change.
 
 The worked sequence can be written compactly as
 
-$
+$$
 \boxed{
 \Psi_0
 \xrightarrow{
@@ -1592,17 +1592,17 @@ X_3=\mathrm{yes}
 S_{10}^{5}
 \Psi_{\mathrm{final}}
 }
-$
+$$
 
 with both observed coordinates clamped after they are introduced.
 
 Every arrow labeled by a hard answer means
 
-$
+$$
 \text{point-mass replacement}
 +
 \text{centered kernel propagation}.
-$
+$$
 
 Every $S_{10}$ means one full deterministic sequential sweep in which each
 unclamped source is replaced by its size-10 multinomial modal empirical type
