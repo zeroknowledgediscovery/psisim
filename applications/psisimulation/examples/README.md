@@ -53,21 +53,21 @@ bash applications/psisimulation/run_example.sh
 
 The example uses
 
-$$
+```math
 n=10
-$$
+```
 
 for the finite empirical mode updates,
 
-$$
+```math
 \alpha=1
-$$
+```
 
 for the centered response scale, and
 
-$$
+```math
 \texttt{random\_permutation}=\texttt{False}
-$$
+```
 
 so every relaxation sweep uses the deterministic native tree order.
 
@@ -91,11 +91,11 @@ source_maps/
 Each learned target coordinate $j$ has a native tree implementing a
 categorical conditional predictor
 
-$$
+```math
 \phi_j(x_{-j})
 =
 \Pr_{\mathrm{LSM}}(X_j=\cdot\mid x_{-j}).
-$$
+```
 
 The source maps define the legal raw categorical labels for each coordinate and
 their native integer encodings.
@@ -119,52 +119,52 @@ unless `DTAG_MODEL_ROOT` overrides the cache root.
 
 Let the GSS-2018 model contain learned coordinates
 
-$$
+```math
 X_1,\ldots,X_d
-$$
+```
 
 with categorical alphabets
 
-$$
+```math
 \Sigma_1,\ldots,\Sigma_d.
-$$
+```
 
 PsiSim does not evolve one categorical value per variable.  It evolves the
 probability-valued state
 
-$$
+```math
 \Psi
 =
 (p_1,\ldots,p_d),
-$$
+```
 
 where
 
-$$
+```math
 p_i\in\Delta(\Sigma_i).
-$$
+```
 
 Thus the dynamical state lives in
 
-$$
+```math
 \prod_{i=1}^d\Delta(\Sigma_i).
-$$
+```
 
 For example, if one variable has categories
 
-$$
+```math
 \Sigma_i
 =
 \{\text{yes},\text{no},\text{don't know}\},
-$$
+```
 
 then that coordinate of Psi might be
 
-$$
+```math
 p_i
 =
 (0.61,0.34,0.05),
-$$
+```
 
 rather than a single hard symbol.
 
@@ -174,27 +174,27 @@ rather than a single hard symbol.
 
 The simulation first forms the all-missing hard row
 
-$$
+```math
 x_\varnothing
 =
 (\varnothing,\ldots,\varnothing).
-$$
+```
 
 For every learned coordinate $i$,
 
-$$
+```math
 p_i^0
 =
 \phi_i(x_\varnothing).
-$$
+```
 
 Therefore
 
-$$
+```math
 \Psi_0
 =
 (p_1^0,\ldots,p_d^0).
-$$
+```
 
 In the code this is
 
@@ -225,31 +225,31 @@ the implementation.
 For source coordinate $i$, target coordinate $j$, and source symbol
 $\sigma\in\Sigma_i$, form the hard row
 
-$$
+```math
 x^{(i=\sigma)}
-$$
+```
 
 whose only observed coordinate is
 
-$$
+```math
 x_i=\sigma.
-$$
+```
 
 Every other coordinate is missing.
 
 Then
 
-$$
+```math
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 \phi_j(x^{(i=\sigma)}).
-$$
+```
 
 The native runtime caches this distribution using the key
 
-$$
+```math
 (i,j,\sigma).
-$$
+```
 
 A perturbation of source $i$ is propagated only to target trees $j$ whose
 learned tree actually uses $i$.
@@ -265,9 +265,9 @@ Let source coordinate $i=0$.
 
 Immediately before the first question its distribution is
 
-$$
+```math
 p_0^0.
-$$
+```
 
 The answer
 
@@ -277,23 +277,23 @@ working fulltime
 
 is represented as the point mass
 
-$$
+```math
 \nu_0
 =
 \delta_{\mathrm{working\ fulltime}}.
-$$
+```
 
 The centered source displacement is
 
-$$
+```math
 \Delta_0
 =
 \nu_0-p_0^0.
-$$
+```
 
 Written componentwise,
 
-$$
+```math
 \Delta_0(\sigma)
 =
 \mathbf 1
@@ -302,44 +302,44 @@ $$
 \}
 -
 p_0^0(\sigma).
-$$
+```
 
 The source coordinate is hard-collapsed:
 
-$$
+```math
 p_0^+
 =
 \delta_{\mathrm{working\ fulltime}}.
-$$
+```
 
 For every dependent target $j$, the immediate response is
 
-$$
+```math
 r_{j\leftarrow 0}
 =
 \sum_{\sigma\in\Sigma_0}
 \Delta_0(\sigma)
 K_{j\leftarrow 0}(\cdot\mid\sigma).
-$$
+```
 
 With the default response scale $\alpha=1$,
 
-$$
+```math
 \widetilde p_j^+
 =
 p_j^0+r_{j\leftarrow 0}.
-$$
+```
 
 If this candidate leaves the categorical simplex, it is projected back:
 
-$$
+```math
 p_j^+
 =
 \Pi_{\Delta(\Sigma_j)}
 \left(
 \widetilde p_j^+
 \right).
-$$
+```
 
 All learned target coordinates whose trees do not use column 0 remain
 unchanged by this immediate response.
@@ -359,17 +359,17 @@ for this hard observation.
 
 For a hard answer, the source event TV is
 
-$$
+```math
 \operatorname{TV}
 \left(
 p_0^0,
 \delta_{\mathrm{working\ fulltime}}
 \right).
-$$
+```
 
 The KL rate computed internally is
 
-$$
+```math
 D
 \left(
 \delta_{\mathrm{working\ fulltime}}
@@ -379,7 +379,7 @@ p_0^0
 =
 -\log
 p_0^0(\mathrm{working\ fulltime}),
-$$
+```
 
 provided the chosen answer has positive model probability.
 
@@ -409,11 +409,11 @@ so the first answer becomes persistent evidence.
 
 From this point onward,
 
-$$
+```math
 p_0
 =
 \delta_{\mathrm{working\ fulltime}}
-$$
+```
 
 through all later relaxation sweeps and after the second question.
 
@@ -437,65 +437,65 @@ Five deterministic finite-$n$ mode sweeps are now performed.
 
 The example uses
 
-$$
+```math
 n=10.
-$$
+```
 
 For each non-clamped source coordinate $i$, suppose the current distribution
 at the moment that source is visited is
 
-$$
+```math
 p_i.
-$$
+```
 
 PsiSim constructs the multinomial modal empirical type
 
-$$
+```math
 \nu_i
 =
 \frac{c}{10},
-$$
+```
 
 where the integer counts satisfy
 
-$$
+```math
 \sum_{\sigma\in\Sigma_i}c_\sigma=10.
-$$
+```
 
 The implementation obtains the global multinomial mode by assigning counts one
 at a time to the category maximizing
 
-$$
+```math
 \frac{p_i(\sigma)}{c_\sigma+1}.
-$$
+```
 
 Because $n=10$, every component of $\nu_i$ is an integer multiple of
 
-$$
+```math
 0.1.
-$$
+```
 
 This means that even a smooth probability vector such as
 
-$$
+```math
 (0.63,0.24,0.13)
-$$
+```
 
 would typically be replaced by a nearby finite empirical type such as
 
-$$
+```math
 (0.6,0.3,0.1),
-$$
+```
 
 depending on the exact multinomial mode.
 
 That finite empirical displacement
 
-$$
+```math
 \Delta_i
 =
 \nu_i-p_i
-$$
+```
 
 is then propagated with the same centered response formula used for the hard
 observation.
@@ -506,13 +506,13 @@ observation.
 
 Suppose the learned source tree order is
 
-$$
+```math
 i_1,i_2,\ldots,i_m.
-$$
+```
 
 One sweep is
 
-$$
+```math
 S
 =
 T_{i_m}
@@ -520,7 +520,7 @@ T_{i_m}
 T_{i_2}
 \circ
 T_{i_1}.
-$$
+```
 
 The state used by $T_{i_2}$ is already the state produced by $T_{i_1}$.
 
@@ -529,9 +529,9 @@ beginning-of-sweep state and applying them simultaneously.
 
 This matters because generally
 
-$$
+```math
 T_iT_j\neq T_jT_i.
-$$
+```
 
 The example sets
 
@@ -549,36 +549,36 @@ This makes the deterministic example reproducible.
 
 For each finite empirical event,
 
-$$
+```math
 \nu_i,
-$$
+```
 
 the runtime reports
 
-$$
+```math
 D(\nu_i\|p_i)
 =
 \sum_{\sigma:\nu_i(\sigma)>0}
 \nu_i(\sigma)
 \log
 \frac{\nu_i(\sigma)}{p_i(\sigma)}.
-$$
+```
 
 The logarithm is natural, so the quantity is in nats.
 
 For $n=10$, the event exponent is
 
-$$
+```math
 10D(\nu_i\|p_i).
-$$
+```
 
 A complete sweep accumulates the source rates and reports
 
-$$
+```math
 10
 \sum_{i\in\text{sweep}}
 D(\nu_i\|p_i).
-$$
+```
 
 This diagnostic quantifies how atypical the finite empirical events are
 relative to the current marginals.
@@ -592,7 +592,7 @@ the trajectory.
 
 After the first hard answer, the trajectory is
 
-$$
+```math
 \Psi_{1,0}
 \rightarrow
 \Psi_{1,1}
@@ -604,38 +604,38 @@ $$
 \Psi_{1,4}
 \rightarrow
 \Psi_{1,5},
-$$
+```
 
 where
 
-$$
+```math
 \Psi_{1,0}
-$$
+```
 
 is the immediate post-answer state and
 
-$$
+```math
 \Psi_{1,r}
 =
 S_{10}
 (
 \Psi_{1,r-1}
 )
-$$
+```
 
 for $r=1,\ldots,5$.
 
 For every sweep the script records
 
-$$
+```math
 \operatorname{meanTV}
-$$
+```
 
 and
 
-$$
+```math
 \operatorname{maxTV}
-$$
+```
 
 between the state before the full sweep and the state after the full sweep.
 
@@ -652,53 +652,53 @@ the residual diagnostics or tested by continuing the trajectory.
 
 After five relaxation sweeps, denote the current state by
 
-$$
+```math
 \Psi_{1,5}.
-$$
+```
 
 Now source coordinate $i=3$ is hard-observed as
 
-$$
+```math
 X_3=\text{yes}.
-$$
+```
 
 Let its pre-observation marginal be
 
-$$
+```math
 p_3^{(1,5)}.
-$$
+```
 
 The imposed empirical distribution is
 
-$$
+```math
 \nu_3
 =
 \delta_{\mathrm{yes}},
-$$
+```
 
 and the centered displacement is
 
-$$
+```math
 \Delta_3
 =
 \delta_{\mathrm{yes}}
 -
 p_3^{(1,5)}.
-$$
+```
 
 For each dependent target $j$,
 
-$$
+```math
 r_{j\leftarrow3}
 =
 \sum_{\sigma\in\Sigma_3}
 \Delta_3(\sigma)
 K_{j\leftarrow3}(\cdot\mid\sigma).
-$$
+```
 
 The target update is again
 
-$$
+```math
 p_j^+
 =
 \Pi_{\Delta(\Sigma_j)}
@@ -707,23 +707,23 @@ p_j
 +
 r_{j\leftarrow3}
 \right].
-$$
+```
 
 At this point both observations are clamped:
 
-$$
+```math
 p_0
 =
 \delta_{\mathrm{working\ fulltime}},
-$$
+```
 
 and
 
-$$
+```math
 p_3
 =
 \delta_{\mathrm{yes}}.
-$$
+```
 
 No subsequent response is permitted to alter either clamped target.
 
@@ -737,7 +737,7 @@ already reached after the first answer and its five relaxation sweeps.
 
 The state now undergoes another five deterministic mode sweeps:
 
-$$
+```math
 \Psi_{2,0}
 \rightarrow
 \Psi_{2,1}
@@ -745,19 +745,19 @@ $$
 \cdots
 \rightarrow
 \Psi_{2,5}.
-$$
+```
 
 During these sweeps,
 
-$$
+```math
 X_0=\text{working fulltime}
-$$
+```
 
 and
 
-$$
+```math
 X_3=\text{yes}
-$$
+```
 
 remain fixed as persistent evidence.
 
@@ -766,11 +766,11 @@ response dynamics.
 
 The final probability-valued state is
 
-$$
+```math
 \Psi_{\mathrm{final}}
 =
 \Psi_{2,5}.
-$$
+```
 
 ---
 
@@ -784,12 +784,12 @@ final_hard_row.csv
 
 with
 
-$$
+```math
 x_i^\star
 =
 \arg\max_{\sigma\in\Sigma_i}
 p_i^{\mathrm{final}}(\sigma).
-$$
+```
 
 This hard row is useful for
 
@@ -800,15 +800,15 @@ This hard row is useful for
 
 But the simulation itself evolves
 
-$$
+```math
 \Psi_{\mathrm{final}},
-$$
+```
 
 not merely
 
-$$
+```math
 x^\star.
-$$
+```
 
 Two probability states can have the same MAP hard row while retaining
 different uncertainty distributions.
@@ -880,25 +880,25 @@ optionally assemble GIF
 
 Suppose an empirical event at source $i$ exactly equals its current marginal:
 
-$$
+```math
 \nu_i=p_i.
-$$
+```
 
 Then
 
-$$
+```math
 \Delta_i=0.
-$$
+```
 
 Therefore
 
-$$
+```math
 \sum_\sigma
 \Delta_i(\sigma)
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 0
-$$
+```
 
 for every target $j$.
 
@@ -924,17 +924,17 @@ should therefore report numerical zero movement.
 
 The supplied sequence is
 
-$$
+```math
 Q_1:
 X_0=\text{working fulltime},
-$$
+```
 
 then five sweeps, then
 
-$$
+```math
 Q_2:
 X_3=\text{yes}.
-$$
+```
 
 This is not generally equivalent to reversing the questions.
 
@@ -942,31 +942,31 @@ The first answer changes many marginals.  The relaxation sweeps further change
 the state.  Therefore the source distribution at column 3 when the second
 question arrives is
 
-$$
+```math
 p_3^{(1,5)},
-$$
+```
 
 not the original
 
-$$
+```math
 p_3^0.
-$$
+```
 
 The second centered displacement is therefore
 
-$$
+```math
 \delta_{\mathrm{yes}}
 -
 p_3^{(1,5)},
-$$
+```
 
 which can differ substantially from
 
-$$
+```math
 \delta_{\mathrm{yes}}
 -
 p_3^0.
-$$
+```
 
 This makes question order a scientifically meaningful perturbation variable.
 
@@ -995,9 +995,9 @@ question is effectively applied near the first-answer fixed point.
 
 Thus the integer
 
-$$
+```math
 s_q
-$$
+```
 
 after each question controls the separation of timescales between external
 interventions.
@@ -1016,9 +1016,9 @@ This can be used to study
 
 The default
 
-$$
+```math
 n=10
-$$
+```
 
 sets the empirical resolution of the deterministic relaxation.
 
@@ -1030,23 +1030,23 @@ current marginal.
 
 Therefore the family of deterministic maps
 
-$$
+```math
 S_n
-$$
+```
 
 depends on $n$.
 
 One should not assume that an endpoint found at
 
-$$
+```math
 n=10
-$$
+```
 
 is invariant under
 
-$$
+```math
 n=20,\quad50,\quad100.
-$$
+```
 
 A useful sensitivity analysis is to repeat the exact same question sequence
 over several $n$ values and compare
@@ -1063,13 +1063,13 @@ over several $n$ values and compare
 
 The example uses
 
-$$
+```math
 \alpha=1.
-$$
+```
 
 In the general update,
 
-$$
+```math
 p_j^+
 =
 \Pi_\Delta
@@ -1081,32 +1081,32 @@ p_j
 (\nu_i(\sigma)-p_i(\sigma))
 K_{j\leftarrow i}(\cdot\mid\sigma)
 \right].
-$$
+```
 
 Thus $\alpha$ scales propagation away from the source.
 
 At
 
-$$
+```math
 \alpha=0,
-$$
+```
 
 the source itself changes to its empirical distribution but no dependent
 target responds.
 
 At
 
-$$
+```math
 0<\alpha<1,
-$$
+```
 
 the propagated response is damped.
 
 At
 
-$$
+```math
 \alpha>1,
-$$
+```
 
 the response is amplified and simplex projection may occur more frequently.
 
@@ -1215,15 +1215,15 @@ For a relaxation sweep,
 
 The most important convergence quantities are
 
-$$
+```math
 \operatorname{meanTV}
-$$
+```
 
 and
 
-$$
+```math
 \operatorname{maxTV}.
-$$
+```
 
 If five sweeps are insufficient, continue the trajectory rather than calling
 the final state an equilibrium solely because the script stopped.
@@ -1307,9 +1307,9 @@ Reverse columns 0 and 3 to test noncommutativity and path dependence.
 
 Run
 
-$$
+```math
 s=0,1,2,5,10,20
-$$
+```
 
 sweeps between questions.
 
@@ -1317,9 +1317,9 @@ sweeps between questions.
 
 Run
 
-$$
+```math
 n=5,10,20,50,100.
-$$
+```
 
 ### Stochastic test
 
@@ -1336,9 +1336,9 @@ distribution.
 
 Vary
 
-$$
+```math
 \alpha
-$$
+```
 
 and inspect convergence and projection frequency.
 
@@ -1366,15 +1366,15 @@ endpoints using native qdistance.
 
 Thus the progressive example studies
 
-$$
+```math
 \text{controlled intervention paths from }\Psi_0,
-$$
+```
 
 whereas equilibrium clustering studies
 
-$$
+```math
 \text{population endpoint geometry from empirical initial conditions}.
-$$
+```
 
 They use the same core response operator but answer different questions.
 
@@ -1384,29 +1384,29 @@ They use the same core response operator but answer different questions.
 
 If two runs produce hard endpoints
 
-$$
+```math
 x^\star
-$$
+```
 
 and
 
-$$
+```math
 y^\star,
-$$
+```
 
 the native qdistance does not merely count unequal symbols.
 
 For each learned target $j$, compute
 
-$$
+```math
 P_j^x=\phi_j(x^\star),
 \qquad
 P_j^y=\phi_j(y^\star).
-$$
+```
 
 Then
 
-$$
+```math
 d_j
 =
 \sqrt{
@@ -1416,16 +1416,16 @@ P_j^x,
 P_j^y
 )
 }.
-$$
+```
 
 The global distance is
 
-$$
+```math
 d_Q(x^\star,y^\star)
 =
 \frac1{|\mathcal T|}
 \sum_{j\in\mathcal T}d_j.
-$$
+```
 
 This compares the two rows through their induced learned conditional
 predictions across the model.
@@ -1463,21 +1463,21 @@ map which endpoint each trajectory approaches.
 
 The worked example does **not** require that
 
-$$
+```math
 \{\phi_i\}
-$$
+```
 
 be exact conditionals of one known explicit joint distribution.
 
 It does not require
 
-$$
+```math
 \sum_\sigma
 p_i(\sigma)
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 p_j.
-$$
+```
 
 It does not require detailed balance.
 
@@ -1579,7 +1579,7 @@ scientifically material change.
 
 The worked sequence can be written compactly as
 
-$$
+```math
 \boxed{
 \Psi_0
 \xrightarrow{
@@ -1592,17 +1592,17 @@ X_3=\mathrm{yes}
 S_{10}^{5}
 \Psi_{\mathrm{final}}
 }
-$$
+```
 
 with both observed coordinates clamped after they are introduced.
 
 Every arrow labeled by a hard answer means
 
-$$
+```math
 \text{point-mass replacement}
 +
 \text{centered kernel propagation}.
-$$
+```
 
 Every $S_{10}$ means one full deterministic sequential sweep in which each
 unclamped source is replaced by its size-10 multinomial modal empirical type
