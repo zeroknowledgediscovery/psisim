@@ -9,12 +9,12 @@ required.
 The central object is not a conventional trajectory of observed survey rows.
 It is a trajectory in a product of probability simplices,
 
-\[
+$
 \Psi=(p_1,p_2,\ldots,p_d),\qquad
 p_i\in\Delta(\Sigma_i),
-\]
+$
 
-where \(\Sigma_i\) is the categorical alphabet of variable \(i\).  A trained LSM
+where $\Sigma_i$ is the categorical alphabet of variable $i$.  A trained LSM
 supplies one learned conditional predictor for each modeled coordinate.  PsiSim
 uses those learned conditionals to define a dynamical response operator,
 injects finite empirical events or hard observations into one coordinate at a
@@ -95,7 +95,7 @@ A native model is a directory containing at least
 
 The binary trees encode learned conditional predictors.  The source maps map
 raw categorical labels to the integer codes used by the native trees.  Integer
-code \(0\) is reserved for the missing/unobserved state.
+code $0$ is reserved for the missing/unobserved state.
 
 PsiSim can be given a local model directory, or a public model key such as
 
@@ -118,87 +118,87 @@ after verifying the archive SHA256 from the release manifest.
 
 Let the modeled variables be
 
-\[
+$
 X_1,\ldots,X_d,
-\]
+$
 
 with finite alphabets
 
-\[
+$
 \Sigma_i=\{\sigma_{i1},\ldots,\sigma_{im_i}\}.
-\]
+$
 
-For each learned target coordinate \(i\), the native LSM contains a predictor
+For each learned target coordinate $i$, the native LSM contains a predictor
 
-\[
+$
 \phi_i:x_{-i}\longmapsto
 \Pr_{\mathrm{LSM}}(X_i=\cdot\mid x_{-i}),
-\]
+$
 
 implemented by \`tree_i.bin\`.
 
-The argument \(x_{-i}\) is a **hard partial row**: every coordinate is either a
+The argument $x_{-i}$ is a **hard partial row**: every coordinate is either a
 raw categorical symbol or missing.  The returned object is a categorical
-distribution over \(\Sigma_i\).
+distribution over $\Sigma_i$.
 
 The predictor is learned from data.  It is not assumed that the collection
 
-\[
+$
 \{\phi_i\}_{i=1}^d
-\]
+$
 
 is the set of exact full conditionals of one explicitly represented joint
 probability law.  This matters for the dynamics.
 
 ### 2.3 The dependency graph is learned from actual tree usage
 
-For a target tree \(j\), the native predictor exposes the set of input columns
+For a target tree $j$, the native predictor exposes the set of input columns
 actually used by that tree.  PsiSim constructs a directed dependency graph
 
-\[
+$
 i\longrightarrow j
-\]
+$
 
 when
 
-1. \(i\neq j\);
-2. both \(i\) and \(j\) are learned LSM coordinates; and
-3. the learned predictor for \(j\) actually uses column \(i\).
+1. $i\neq j$;
+2. both $i$ and $j$ are learned LSM coordinates; and
+3. the learned predictor for $j$ actually uses column $i$.
 
-The centered update propagates a perturbation from source \(i\) only to these
+The centered update propagates a perturbation from source $i$ only to these
 dependent targets.  It does not blindly update every coordinate.
 
 
 ### 2.4 Exact native tree inference semantics
 
 The serialized native predictor is a categorical decision tree.  At an internal
-split node, let the split variable be \(X_c\), with a left category subset
-\(A_L\) and a right category subset \(A_R\).
+split node, let the split variable be $X_c$, with a left category subset
+$A_L$ and a right category subset $A_R$.
 
-For a hard input row \(x\):
+For a hard input row $x$:
 
-* if \(x_c\neq\varnothing\) and its encoded category lies in \(A_L\), inference
+* if $x_c\neq\varnothing$ and its encoded category lies in $A_L$, inference
   follows the left child;
-* if it lies in \(A_R\), inference follows the right child;
+* if it lies in $A_R$, inference follows the right child;
 * if the value is missing/unresolved at that split, inference evaluates **both**
   children and mixes their output distributions using learned subtree mass.
 
 Let
 
-\[
+$
 N_L
-\]
+$
 
 and
 
-\[
+$
 N_R
-\]
+$
 
 be the total target counts represented below the left and right child
 respectively.  Missing-value routing uses
 
-\[
+$
 \pi_L
 =
 \frac{N_L}{N_L+N_R},
@@ -206,54 +206,54 @@ respectively.  Missing-value routing uses
 \pi_R
 =
 1-\pi_L,
-\]
+$
 
 and returns
 
-\[
+$
 p
 =
 \pi_L p_L
 +
 \pi_R p_R.
-\]
+$
 
 At a leaf, the target distribution is obtained by normalizing the stored target
 counts.
 
 This recursion is the implementation of
 
-\[
+$
 \phi_j(x_{-j}).
-\]
+$
 
 It also explains two important constructions used later:
 
 1. for the all-missing row, every unresolved split is marginalized by learned
-   subtree mass, producing the empty-state marginal \(p_j^0\);
-2. for a one-coordinate hard row \(x^{(i=\sigma)}\), only information carried
+   subtree mass, producing the empty-state marginal $p_j^0$;
+2. for a one-coordinate hard row $x^{(i=\sigma)}$, only information carried
    by that one source symbol is resolved explicitly, while all other split
    variables are marginalized in the same manner.
 
 Consequently the kernel
 
-\[
+$
 K_{j\leftarrow i}(\cdot\mid\sigma)
-\]
+$
 
 is a native-tree inference quantity, not an externally estimated response
 matrix.
 
-### 2.5 Hard inference versus the soft-\(\Psi\) predictor
+### 2.5 Hard inference versus the soft-$\Psi$ predictor
 
 The vendored \`predict_distribution\` binding also implements a soft predictor
 
-\[
+$
 \phi_j^{\mathrm{soft}}(\Psi),
-\]
+$
 
 which routes probability mass through a tree rather than a single hard
-category.  At a split on variable \(c\), each category mass in \(p_c\) is sent
+category.  At a split on variable $c$, each category mass in $p_c$ is sent
 to the branch containing that category; unresolved mass is divided according
 to the same subtree-mass rule.  If a predictor variable appears again deeper
 in the tree, the branch-conditioned distribution for that variable is carried
@@ -261,9 +261,9 @@ recursively.
 
 That soft predictor is useful for other mean-field constructions, but the
 **centered dynamics used by PsiSim is deliberately defined from the hard
-one-coordinate kernels** \(K_{j\leftarrow i}\).  The current progressive and
+one-coordinate kernels** $K_{j\leftarrow i}$.  The current progressive and
 equilibrium workflows should therefore not be described as repeatedly applying
-\(\phi^{\mathrm{soft}}\) synchronously.
+$\phi^{\mathrm{soft}}$ synchronously.
 
 ### 2.6 How the native LSM trees are learned
 
@@ -271,22 +271,22 @@ The upstream LSM trainer builds categorical target trees.  When all target
 columns are requested, the model contains one serialized tree per modeled
 coordinate.  Internal splits are categorical subset tests.
 
-For a candidate feature with \(k\) observed levels, the upstream trainer
+For a candidate feature with $k$ observed levels, the upstream trainer
 supports several split-search regimes:
 
 * **exact**: search the unrestricted oriented nonempty proper subset family,
-  containing \(2^k-2\) possible categorical subsets;
+  containing $2^k-2$ possible categorical subsets;
 * **fast, binary target**: order feature levels by conditional target rate and
-  test the \(k-1\) contiguous cuts;
+  test the $k-1$ contiguous cuts;
 * **fast, multiclass target**: represent levels by
-  \(P(Y\mid X=x)\), group similar levels by Jensen-Shannon divergence into a
+  $P(Y\mid X=x)$, group similar levels by Jensen-Shannon divergence into a
   bounded set of temporary super-levels, search that compressed alphabet, and
   serialize the winning split back in the original category alphabet;
 * **auto**: choose exact or fast locally according to observed feature
   cardinality.
 
 These choices affect the learned tree topology and therefore the conditional
-operators \(\phi_i\).  They do **not** alter the category alphabets stored in
+operators $\phi_i$.  They do **not** alter the category alphabets stored in
 the source maps.
 
 PsiSim itself does not retrain the model.  It consumes the serialized native
@@ -302,8 +302,8 @@ The centered runtime then retains
 * the source-map encoder/decoder;
 * the preloaded native trees;
 * the source-to-dependent-target graph obtained from actual tree usage;
-* the hard-response kernel cache indexed by \((i,j,\sigma)\);
-* the current probability-valued state \(\Psi\); and
+* the hard-response kernel cache indexed by $(i,j,\sigma)$;
+* the current probability-valued state $\Psi$; and
 * the set of clamped hard observations.
 
 Thus repeated questions and sweeps reuse the same model and warmed response
@@ -315,31 +315,31 @@ cache instead of reloading the complete model at every update.
 
 A PsiSim state is
 
-\[
+$
 \Psi=(p_1,\ldots,p_d)
-\]
+$
 
 with
 
-\[
+$
 p_i(\sigma)\ge 0,\qquad
 \sum_{\sigma\in\Sigma_i}p_i(\sigma)=1.
-\]
+$
 
 Thus
 
-\[
+$
 \Psi\in
 \mathcal P
 =
 \prod_{i=1}^d\Delta(\Sigma_i).
-\]
+$
 
 This state should be distinguished from a conventional hard data row
 
-\[
+$
 x=(x_1,\ldots,x_d),\qquad x_i\in\Sigma_i\cup\{\varnothing\}.
-\]
+$
 
 A hard row selects one symbol per observed coordinate.  A Psi state retains a
 full uncertainty distribution at every modeled coordinate.
@@ -347,40 +347,40 @@ full uncertainty distribution at every modeled coordinate.
 A convenient hard representative of a Psi state is its coordinatewise MAP
 projection
 
-\[
+$
 H(\Psi)_i
 =
 \arg\max_{\sigma\in\Sigma_i}p_i(\sigma).
-\]
+$
 
 PsiSim writes this object as \`final_hard_row.csv\` in several workflows.  It
-is a discrete summary of \(\Psi\), not the underlying dynamical state itself.
+is a discrete summary of $\Psi$, not the underlying dynamical state itself.
 
 ---
 
-## 4. Canonical empty-sample state \(\Psi_0\)
+## 4. Canonical empty-sample state $\Psi_0$
 
 Define the all-missing hard row
 
-\[
+$
 x_\varnothing=(\varnothing,\ldots,\varnothing).
-\]
+$
 
 The canonical empty-sample state is
 
-\[
+$
 \Psi_0
 =
 (p_1^0,\ldots,p_d^0),
-\]
+$
 
 where
 
-\[
+$
 p_i^0
 =
 \phi_i(x_\varnothing).
-\]
+$
 
 In code,
 
@@ -396,7 +396,7 @@ psi0 = predict_distribution.row_to_psi(
 and \`resident_empty_state()\` wraps that probability row in the native
 \`CenteredLdpPsiState\`.
 
-No empirical respondent row is required for this construction.  \(\Psi_0\) is
+No empirical respondent row is required for this construction.  $\Psi_0$ is
 the state implied by the learned LSM when no coordinate has been externally
 fixed.
 
@@ -408,21 +408,21 @@ A natural first idea would be to treat the learned conditionals as if they were
 the exact conditionals of a single represented joint law.  In that case one
 might expect identities of the form
 
-\[
+$
 \sum_{\sigma\in\Sigma_i}
 p_i(\sigma)
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 p_j,
-\]
+$
 
-where \(K_{j\leftarrow i}\) is the response of target \(j\) to fixing source
-\(i\).
+where $K_{j\leftarrow i}$ is the response of target $j$ to fixing source
+$i$.
 
 For the learned native LSM trees this identity is not guaranteed.  In
 particular, missing-variable traversal in the predictor is based on the
-learned tree structure and local subtree masses, while \(p_i\) itself is
-produced by a separate learned predictor \(\phi_i\).  The family of learned
+learned tree structure and local subtree masses, while $p_i$ itself is
+produced by a separate learned predictor $\phi_i$.  The family of learned
 predictors therefore need not satisfy the tower identity exactly.
 
 PsiSim avoids building the dynamics on an identity that the trained model does
@@ -431,11 +431,11 @@ source marginal.  This is the centered construction.
 
 The defining invariant is
 
-\[
+$
 \text{no source change}
 \quad\Longrightarrow\quad
 \text{no propagated change}.
-\]
+$
 
 This is exact in the implementation.
 
@@ -443,41 +443,41 @@ This is exact in the implementation.
 
 ## 6. One-coordinate hard-response kernels
 
-For a learned source \(i\), dependent learned target \(j\), and source symbol
-\(\sigma\in\Sigma_i\), define the one-coordinate hard row
+For a learned source $i$, dependent learned target $j$, and source symbol
+$\sigma\in\Sigma_i$, define the one-coordinate hard row
 
-\[
+$
 x^{(i=\sigma)}_k
 =
 \begin{cases}
 \sigma,&k=i,\\
 \varnothing,&k\neq i.
 \end{cases}
-\]
+$
 
 The hard-response kernel is
 
-\[
+$
 K_{j\leftarrow i}(\cdot\mid\sigma)
 =
 \phi_j\!\left(x^{(i=\sigma)}\right).
-\]
+$
 
 This is exactly what
 \`CenteredHardKernelCache\` computes.  The cache key is
 
-\[
+$
 (i,j,\sigma).
-\]
+$
 
 The model is evaluated once for a new key and the resulting categorical
 distribution is reused thereafter.  Batch equilibrium calculations share the
 predictor, dependency graph, and warmed kernel cache across respondent
 trajectories.
 
-Important conceptual point: \(K_{j\leftarrow i}\) isolates the learned response
+Important conceptual point: $K_{j\leftarrow i}$ isolates the learned response
 to **one hard source coordinate with every other input missing**.  It is not a
-conditional evaluated at the full current soft state \(\Psi\).
+conditional evaluated at the full current soft state $\Psi$.
 
 ---
 
@@ -485,89 +485,89 @@ conditional evaluated at the full current soft state \(\Psi\).
 
 Suppose the current source distribution is
 
-\[
+$
 p_i
-\]
+$
 
 and an event replaces it by an empirical distribution
 
-\[
+$
 \nu_i\in\Delta(\Sigma_i).
-\]
+$
 
 Define the centered source displacement
 
-\[
+$
 \delta_i
 =
 \nu_i-p_i.
-\]
+$
 
-Because both \(\nu_i\) and \(p_i\) are normalized,
+Because both $\nu_i$ and $p_i$ are normalized,
 
-\[
+$
 \sum_{\sigma\in\Sigma_i}\delta_i(\sigma)=0.
-\]
+$
 
 The source coordinate is replaced exactly:
 
-\[
+$
 p_i^+
 =
 \nu_i.
-\]
+$
 
-For every dependent, non-clamped target \(j\), define the linear response
+For every dependent, non-clamped target $j$, define the linear response
 
-\[
+$
 r_{j\leftarrow i}
 =
 \sum_{\sigma\in\Sigma_i}
 \delta_i(\sigma)
 K_{j\leftarrow i}(\cdot\mid\sigma).
-\]
+$
 
-With response scale \(\alpha\ge 0\), the unprojected target update is
+With response scale $\alpha\ge 0$, the unprojected target update is
 
-\[
+$
 \widetilde p_j^+
 =
 p_j+\alpha r_{j\leftarrow i}.
-\]
+$
 
 The default is
 
-\[
+$
 \alpha=1.
-\]
+$
 
-Targets whose learned trees do not use \(i\) are not updated.
+Targets whose learned trees do not use $i$ are not updated.
 
 ### 7.1 Exact zero-action property
 
 If
 
-\[
+$
 \nu_i=p_i,
-\]
+$
 
 then
 
-\[
+$
 \delta_i=0
-\]
+$
 
 and therefore
 
-\[
+$
 r_{j\leftarrow i}=0
-\]
+$
 
-for every target \(j\).  Thus
+for every target $j$.  Thus
 
-\[
+$
 T_{i,\mathrm{zero}}(\Psi)=\Psi.
-\]
+$
 
 This holds without any tower-identity assumption.
 
@@ -575,33 +575,33 @@ This holds without any tower-identity assumption.
 
 Although
 
-\[
+$
 \sum_\tau r_{j\leftarrow i}(\tau)=0,
-\]
+$
 
 so total mass is preserved algebraically, a finite linear response can produce
 negative components.  PsiSim therefore computes
 
-\[
+$
 p_j^+
 =
 \Pi_{\Delta(\Sigma_j)}
 \left(
 p_j+\alpha r_{j\leftarrow i}
 \right),
-\]
+$
 
-where \(\Pi_\Delta\) is the Euclidean projection onto the probability simplex.
+where $\Pi_\Delta$ is the Euclidean projection onto the probability simplex.
 
-For a candidate vector \(z\), the projection has the standard form
+For a candidate vector $z$, the projection has the standard form
 
-\[
+$
 \Pi_\Delta(z)_k
 =
 \max(z_k-\theta,0),
-\]
+$
 
-with \(\theta\) chosen so the projected components sum to one.
+with $\theta$ chosen so the projected components sum to one.
 
 The diagnostic \`projected_count\` records how many dependent target updates
 required this projection.
@@ -610,24 +610,24 @@ required this projection.
 
 ## 8. Finite empirical events and the large-deviation interpretation
 
-At a source coordinate with current distribution \(p_i\), PsiSim can generate a
-finite empirical type of size \(n\),
+At a source coordinate with current distribution $p_i$, PsiSim can generate a
+finite empirical type of size $n$,
 
-\[
+$
 \nu_i(\sigma)
 =
 \frac{N_\sigma}{n},
 \qquad
 \sum_\sigma N_\sigma=n.
-\]
+$
 
 Three event modes are implemented.
 
 ### 8.1 \`zero_action\`
 
-\[
+$
 \nu_i=p_i.
-\]
+$
 
 No finite sample is generated.  The centered displacement is exactly zero, so
 the complete update is exactly the identity apart from floating-point
@@ -638,38 +638,38 @@ This is the strongest implementation check for the centering construction.
 ### 8.2 \`mode\`
 
 PsiSim chooses a mode of the multinomial count distribution associated with
-\(p_i\) and sample size \(n\).
+$p_i$ and sample size $n$.
 
-The implementation assigns the \(n\) counts greedily.  At each assignment it
+The implementation assigns the $n$ counts greedily.  At each assignment it
 chooses the category maximizing
 
-\[
+$
 \frac{p_i(\sigma)}{c_\sigma+1},
-\]
+$
 
-where \(c_\sigma\) is the count already assigned to that category.  Because the
+where $c_\sigma$ is the count already assigned to that category.  Because the
 multinomial log probability is separable and concave in the integer counts,
 this produces a global multinomial mode under
 
-\[
+$
 \sum_\sigma c_\sigma=n.
-\]
+$
 
 Then
 
-\[
+$
 \nu_i(\sigma)=c_\sigma/n.
-\]
+$
 
-This mode is deterministic for a fixed state and \(n\), modulo exact ties and
+This mode is deterministic for a fixed state and $n$, modulo exact ties and
 the deterministic iteration order of the stored distribution.
 
-Finite \(n\) matters.  Even when \(p_i\) is smooth, its modal empirical type is
-restricted to the \(1/n\) grid, so generally
+Finite $n$ matters.  Even when $p_i$ is smooth, its modal empirical type is
+restricted to the $1/n$ grid, so generally
 
-\[
+$
 \nu_i\neq p_i.
-\]
+$
 
 That quantization deviation drives the deterministic mode dynamics.
 
@@ -677,49 +677,49 @@ That quantization deviation drives the deterministic mode dynamics.
 
 PsiSim draws
 
-\[
+$
 (N_\sigma)_\sigma
 \sim
 \operatorname{Multinomial}(n,p_i)
-\]
+$
 
 and uses
 
-\[
+$
 \nu_i=N/n.
-\]
+$
 
 This gives a stochastic dynamics.  Even near a deterministic fixed point,
-finite-\(n\) fluctuations persist.
+finite-$n$ fluctuations persist.
 
 ### 8.4 Sanov rate reported by the code
 
-For an empirical event \(\nu_i\), the code reports
+For an empirical event $\nu_i$, the code reports
 
-\[
+$
 D(\nu_i\|p_i)
 =
 \sum_{\sigma:\nu_i(\sigma)>0}
 \nu_i(\sigma)
 \log
 \frac{\nu_i(\sigma)}{p_i(\sigma)}.
-\]
+$
 
 The implementation uses the natural logarithm, so this rate is in **nats**.
 
-For finite \(n\), it also reports
+For finite $n$, it also reports
 
-\[
+$
 nD(\nu_i\|p_i),
-\]
+$
 
 the usual Sanov exponent appearing in the asymptotic scale
 
-\[
+$
 \Pr(\nu_i)
 \asymp
 e^{-nD(\nu_i\|p_i)}.
-\]
+$
 
 The variable \`sanov_exponent\` is therefore a dynamical event diagnostic, not a
 thermodynamic free energy.
@@ -728,40 +728,40 @@ thermodynamic free energy.
 
 ## 9. One source step versus a full sweep
 
-A **source step** updates one learned source coordinate \(i\) and propagates its
+A **source step** updates one learned source coordinate $i$ and propagates its
 centered response.
 
 A **sweep** visits every learned source coordinate once.
 
 If
 
-\[
+$
 \mathcal I=(i_1,\ldots,i_m)
-\]
+$
 
 is the source order, then a sweep is the composition
 
-\[
+$
 S
 =
 T_{i_m}\circ\cdots\circ T_{i_2}\circ T_{i_1}.
-\]
+$
 
 The important point is that this is **sequential**, not synchronous.  After
-updating source \(i_1\), the state has changed.  The event generated at source
-\(i_2\) is generated from that new state, and so on.
+updating source $i_1$, the state has changed.  The event generated at source
+$i_2$ is generated from that new state, and so on.
 
 Consequently,
 
-\[
+$
 T_iT_j
-\]
+$
 
 need not equal
 
-\[
+$
 T_jT_i.
-\]
+$
 
 By default PsiSim uses the sorted native tree order
 (\`random_permutation=False\`).  An optional randomized source order is also
@@ -777,41 +777,41 @@ Python simulation scripts separately maintain a human-readable sweep counter.
 
 A survey response or externally imposed state
 
-\[
+$
 X_i=\sigma
-\]
+$
 
 is represented by the point mass
 
-\[
+$
 \nu_i=\delta_\sigma,
-\]
+$
 
 where
 
-\[
+$
 \delta_\sigma(\tau)
 =
 \mathbf 1\{\tau=\sigma\}.
-\]
+$
 
 The hard-observation displacement is
 
-\[
+$
 \delta_i
 =
 \delta_\sigma-p_i.
-\]
+$
 
 PsiSim immediately propagates
 
-\[
+$
 r_{j\leftarrow i}
 =
 \sum_{\tau\in\Sigma_i}
 \bigl[\delta_\sigma(\tau)-p_i(\tau)\bigr]
 K_{j\leftarrow i}(\cdot\mid\tau)
-\]
+$
 
 to every dependent target.
 
@@ -847,7 +847,7 @@ subsequent relaxation.
 
 The principal interactive experiment is
 
-\[
+$
 \Psi_0
 \rightarrow
 \text{hard answer 1}
@@ -858,23 +858,23 @@ The principal interactive experiment is
 \rightarrow
 \text{relax}
 \rightarrow\cdots
-\]
+$
 
-For question \(q\), with source \(i_q\), answer \(\sigma_q\), and \(s_q\)
+For question $q$, with source $i_q$, answer $\sigma_q$, and $s_q$
 relaxation sweeps,
 
-\[
+$
 \Psi^{(q,0)}
 =
 H_{i_q,\sigma_q}
 \left(
 \Psi^{(q-1,s_{q-1})}
 \right),
-\]
+$
 
 followed by
 
-\[
+$
 \Psi^{(q,r)}
 =
 S_n
@@ -883,10 +883,10 @@ S_n
 \right),
 \qquad
 r=1,\ldots,s_q,
-\]
+$
 
-where \(H\) is the clamped hard-observation update and \(S_n\) is the selected
-finite-\(n\) sweep operator.
+where $H$ is the clamped hard-observation update and $S_n$ is the selected
+finite-$n$ sweep operator.
 
 The default progressive example uses deterministic multinomial-mode sweeps.
 
@@ -898,42 +898,42 @@ changing question order can change the trajectory and endpoint.
 
 ## 12. Numerical movement and convergence diagnostics
 
-For two categorical distributions \(p\) and \(q\), PsiSim uses total variation
+For two categorical distributions $p$ and $q$, PsiSim uses total variation
 
-\[
+$
 \operatorname{TV}(p,q)
 =
 \frac12
 \sum_\sigma
 |p(\sigma)-q(\sigma)|.
-\]
+$
 
 For a state transition
 
-\[
+$
 \Psi\rightarrow\Psi',
-\]
+$
 
 the code reports
 
-\[
+$
 \operatorname{meanTV}
 =
 \frac{1}{m}
 \sum_{i\in\mathcal T}
 \operatorname{TV}(p_i,p_i'),
-\]
+$
 
 and
 
-\[
+$
 \operatorname{maxTV}
 =
 \max_{i\in\mathcal T}
 \operatorname{TV}(p_i,p_i'),
-\]
+$
 
-where \(\mathcal T\) is the set of learned target trees.
+where $\mathcal T$ is the set of learned target trees.
 
 It also reports the coordinate attaining the maximum movement.
 
@@ -942,15 +942,15 @@ sweep** with the state after the entire sweep.
 
 A deterministic numerical fixed point of the mode dynamics is indicated by
 
-\[
+$
 \operatorname{maxTV}\rightarrow 0
-\]
+$
 
 and
 
-\[
+$
 \operatorname{meanTV}\rightarrow 0.
-\]
+$
 
 This is a numerical fixed point of the implemented map.  It is not, by itself,
 a proof of
@@ -967,7 +967,7 @@ verify return to the same endpoint under the same update rule.
 
 ---
 
-## 13. \(\Psi_0\) and the meaning of a fixed point
+## 13. $\Psi_0$ and the meaning of a fixed point
 
 Two statements must be kept separate.
 
@@ -975,30 +975,30 @@ Two statements must be kept separate.
 
 For every state,
 
-\[
+$
 S_{\mathrm{zero}}(\Psi)=\Psi.
-\]
+$
 
 Therefore
 
-\[
+$
 S_{\mathrm{zero}}(\Psi_0)=\Psi_0
-\]
+$
 
 exactly.
 
-### 13.2 Finite-\(n\) mode dynamics
+### 13.2 Finite-$n$ mode dynamics
 
-For \`event="mode"\`, each marginal is replaced by a finite-\(n\) modal
+For \`event="mode"\`, each marginal is replaced by a finite-$n$ modal
 empirical type.  Unless that type is exactly equal to the current marginal,
 
-\[
+$
 \nu_i-p_i\neq 0,
-\]
+$
 
 and the state moves.
 
-Therefore \(\Psi_0\) need not be a fixed point of the finite-\(n\) mode
+Therefore $\Psi_0$ need not be a fixed point of the finite-$n$ mode
 dynamics.
 
 This is intentional.  The finite empirical realization is the event that
@@ -1009,22 +1009,22 @@ drives the centered response.
 ## 14. Initialization from an observed hard respondent row
 
 Population equilibrium experiments begin from observed survey rows rather than
-from \(\Psi_0\).
+from $\Psi_0$.
 
 Given a hard row
 
-\[
+$
 x=(x_1,\ldots,x_d),
-\]
+$
 
-for every learned target \(i\) the batch initializer temporarily removes that
+for every learned target $i$ the batch initializer temporarily removes that
 target value and computes
 
-\[
+$
 p_i
 =
 \phi_i(x_{-i}).
-\]
+$
 
 Thus the initial Psi state around an observed respondent is a collection of
 leave-one-coordinate-out conditional distributions, not simply a vector of
@@ -1033,12 +1033,12 @@ point masses at the observed answers.
 This distinction is important when interpreting
 \`centered_ldp_converge_rows\`.
 
-The trajectory then undergoes the requested finite-\(n\) centered sweeps.  At
+The trajectory then undergoes the requested finite-$n$ centered sweeps.  At
 the endpoint PsiSim returns the coordinatewise MAP hard realization
 
-\[
+$
 H(\Psi^\star).
-\]
+$
 
 ---
 
@@ -1046,9 +1046,9 @@ H(\Psi^\star).
 
 PsiSim uses the native LSM qdistance to compare hard endpoint rows.
 
-For rows \(x\) and \(y\), target tree \(j\) produces
+For rows $x$ and $y$, target tree $j$ produces
 
-\[
+$
 P_j^x
 =
 \phi_j(x),
@@ -1056,17 +1056,17 @@ P_j^x
 P_j^y
 =
 \phi_j(y).
-\]
+$
 
 Let
 
-\[
+$
 M_j=\frac12(P_j^x+P_j^y).
-\]
+$
 
 The implementation computes the bit-based Jensen-Shannon divergence
 
-\[
+$
 \operatorname{JS}_2(P,Q)
 =
 \frac12
@@ -1074,25 +1074,25 @@ D_{\mathrm{KL},2}(P\|M)
 +
 \frac12
 D_{\mathrm{KL},2}(Q\|M)
-\]
+$
 
 and then takes its square root:
 
-\[
+$
 d_j(x,y)
 =
 \sqrt{\operatorname{JS}_2(P_j^x,P_j^y)}.
-\]
+$
 
 The global qdistance is
 
-\[
+$
 d_Q(x,y)
 =
 \frac{1}{|\mathcal T|}
 \sum_{j\in\mathcal T}
 d_j(x,y).
-\]
+$
 
 The current code and field names call these quantities
 \`qdistance_bits\`/\`per_tree_bits\`; mathematically, because of the square root,
@@ -1113,46 +1113,46 @@ toward a smaller number of recurrent endpoint families.
 The implemented workflow is:
 
 1. read an empirical survey CSV;
-2. reproducibly sample \(N\) observed rows;
+2. reproducibly sample $N$ observed rows;
 3. initialize one probability-valued state from each hard row;
 4. evolve each state for the requested number of deterministic mode sweeps;
 5. convert each terminal Psi state to its coordinatewise MAP hard row;
 6. save those hard endpoints to disk;
 7. reload them from disk;
-8. compute the full \(N\times N\) native qdistance matrix;
+8. compute the full $N\times N$ native qdistance matrix;
 9. fit k-medoids directly in qdistance space;
-10. choose \(k\) by mean silhouette over a specified candidate range;
+10. choose $k$ by mean silhouette over a specified candidate range;
 11. designate sufficiently large clusters as major;
 12. report the actual medoid endpoint of each major cluster;
 13. compute a classical-MDS embedding only for visualization.
 
 ### 16.1 k-medoids
 
-For a cluster \(C\), its medoid is the actual endpoint
+For a cluster $C$, its medoid is the actual endpoint
 
-\[
+$
 m_C
 =
 \arg\min_{x\in C}
 \frac1{|C|}
 \sum_{y\in C}d_Q(x,y).
-\]
+$
 
 No synthetic averaged categorical respondent is created.
 
-### 16.2 Choice of \(k\)
+### 16.2 Choice of $k$
 
-For each candidate \(k\), PsiSim runs seeded k-medoids restarts and computes
+For each candidate $k$, PsiSim runs seeded k-medoids restarts and computes
 the standard silhouette using the precomputed qdistance matrix,
 
-\[
+$
 s(i)
 =
 \frac{b(i)-a(i)}
 {\max\{a(i),b(i)\}},
-\]
+$
 
-where \(a(i)\) is mean within-cluster distance and \(b(i)\) is the minimum mean
+where $a(i)$ is mean within-cluster distance and $b(i)$ is the minimum mean
 distance to another cluster.
 
 The candidate with the largest mean silhouette is selected.
@@ -1161,9 +1161,9 @@ The candidate with the largest mean silhouette is selected.
 
 By default, a cluster is major only if its size is at least
 
-\[
+$
 \max\left(10,\left\lceil0.05N\right\rceil\right).
-\]
+$
 
 Both thresholds are configurable.
 
@@ -1171,15 +1171,15 @@ Both thresholds are configurable.
 
 Classical MDS forms
 
-\[
+$
 B
 =
 -\frac12 JD^{\circ 2}J,
 \qquad
 J=I-\frac1N\mathbf1\mathbf1^\top,
-\]
+$
 
-diagonalizes \(B\), and displays the leading positive-eigenvalue coordinates.
+diagonalizes $B$, and displays the leading positive-eigenvalue coordinates.
 
 qdistance need not be exactly Euclidean, so negative eigenvalues can occur.
 PsiSim records negative spectral mass as a diagnostic.
@@ -1192,11 +1192,11 @@ Crucially, neither cluster membership nor medoid selection is computed in the
 ## 17. Optional ideology coordinate for equilibrium representatives
 
 \`score_equilibrium_ideology.py\` uses sparse left and right pole rows,
-\(s_L\) and \(s_R\), and the same native qdistance.
+$s_L$ and $s_R$, and the same native qdistance.
 
-For an equilibrium representative \(s\),
+For an equilibrium representative $s$,
 
-\[
+$
 I(s)
 =
 \frac{
@@ -1204,13 +1204,13 @@ d_Q(s_L,s)-d_Q(s_R,s)
 }{
 d_Q(s_L,s_R)
 }.
-\]
+$
 
 With this sign convention,
 
-* \(I(s)>0\): relatively closer to the right pole;
-* \(I(s)<0\): relatively closer to the left pole;
-* \(I(s)=0\): equal qdistance to the two poles.
+* $I(s)>0$: relatively closer to the right pole;
+* $I(s)<0$: relatively closer to the left pole;
+* $I(s)=0$: equal qdistance to the two poles.
 
 This is a geometric coordinate in the learned LSM metric.  It is not a claim
 that all political ideology is intrinsically one-dimensional.
@@ -1336,11 +1336,11 @@ A source step or sweep reports:
   replacement.  For a sweep this is averaged over visited sources.
 
 \`sanov_rate\`
-: \(D(\nu\|p)\) in nats for a source step.  For a sweep the finite rates are
+: $D(\nu\|p)$ in nats for a source step.  For a sweep the finite rates are
   summed across source updates.
 
 \`sanov_exponent\`
-: \(nD\) for finite-\(n\) mode/sample events.  A sweep reports \(n\) times the
+: $nD$ for finite-$n$ mode/sample events.  A sweep reports $n$ times the
   sum of its source rates.
 
 \`mean_tv\`
@@ -1426,7 +1426,7 @@ The complete mathematical walk-through of this example is in
 
 ## 23. Empty-state experiments
 
-Run deterministic finite-\(n\) mode sweeps:
+Run deterministic finite-$n$ mode sweeps:
 
 \`\`\`bash
 python3 applications/psisimulation/simulate_empty.py \
@@ -1515,8 +1515,8 @@ A reproducible PsiSim experiment should record at least
 6. ordered question/answer sequence;
 7. clamp settings;
 8. event mode;
-9. empirical \(n\);
-10. response scale \(\alpha\);
+9. empirical $n$;
+10. response scale $\alpha$;
 11. source ordering or \`random_permutation\`;
 12. random seed for stochastic or randomized-order runs;
 13. requested number of sweeps;
@@ -1547,7 +1547,7 @@ PsiSim supports precise statements such as:
 * a trained LSM induces a probability-valued response system;
 * the centered update has an exact zero-action identity;
 * a specified hard observation produces a specified immediate model response;
-* repeated finite-\(n\) updates may converge numerically;
+* repeated finite-$n$ updates may converge numerically;
 * different respondent initializations may approach distinct endpoint families;
 * those endpoints can be compared in the native LSM qdistance geometry.
 
@@ -1558,7 +1558,7 @@ Additional evidence is required for stronger statements such as:
 * the dynamics obeys detailed balance;
 * the response is generated by a unique scalar potential;
 * an observed cluster is a universal social type independent of dataset,
-  model, update scale, \(n\), or question ordering.
+  model, update scale, $n$, or question ordering.
 
 Those are testable scientific hypotheses, not assumptions built into the
 software.
@@ -1592,12 +1592,12 @@ Before a new model or runtime revision is used for analysis:
 
 1. build both native extensions;
 2. run the smoke test;
-3. verify that a \`zero_action\` sweep leaves \(\Psi\) unchanged;
+3. verify that a \`zero_action\` sweep leaves $\Psi$ unchanged;
 4. verify that a hard observation collapses its source marginal to a point
    mass;
 5. verify that a clamped source remains fixed through later sweeps;
 6. inspect \`projected_count\`;
-7. inspect finite-\(n\) sensitivity over several \(n\);
+7. inspect finite-$n$ sensitivity over several $n$;
 8. test sensitivity to source ordering;
 9. test endpoint stability under additional sweeps;
 10. for claimed attractors, perturb nearby initial conditions and test return;
