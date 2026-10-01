@@ -11,7 +11,7 @@ sweeps after each observation.
 
 The supplied choice file is
 
-\`\`\`json
+```json
 [
   {
     "column": 0,
@@ -24,7 +24,7 @@ The supplied choice file is
     "sweeps": 5
   }
 ]
-\`\`\`
+```
 
 The categorical labels above were verified against the GSS-2018 native model.
 The example deliberately identifies variables by native model column because
@@ -36,20 +36,20 @@ the dynamics operates on the exact model coordinate system and source maps.
 
 From the repository root:
 
-\`\`\`bash
+```bash
 python3 applications/psisimulation/simulate_progressive.py \
   --model gss/gss_2018 \
   --choices applications/psisimulation/examples/gss2018_choices.json \
   --empirical-n 10 \
   --threads "$(nproc)" \
   --gif
-\`\`\`
+```
 
 The complete convenience script is
 
-\`\`\`bash
+```bash
 bash applications/psisimulation/run_example.sh
-\`\`\`
+```
 
 The example uses
 
@@ -77,16 +77,16 @@ so every relaxation sweep uses the deterministic native tree order.
 
 The model key
 
-\`\`\`text
+```text
 gss/gss_2018
-\`\`\`
+```
 
 resolves to a native LSM model directory containing
 
-\`\`\`text
+```text
 trees/binary/tree_*.bin
 source_maps/
-\`\`\`
+```
 
 Each learned target coordinate $j$ has a native tree implementing a
 categorical conditional predictor
@@ -103,15 +103,15 @@ their native integer encodings.
 The model is not a language model.  It is a collection of learned conditional
 predictors over the survey coordinate system.
 
-If the model is not already installed, \`fetch_model.py\` downloads the public
+If the model is not already installed, `fetch_model.py` downloads the public
 model archive, verifies its SHA256 against the release manifest, and installs
 it under
 
-\`\`\`text
+```text
 ~/.cache/dtag/models/gss/gss_2018
-\`\`\`
+```
 
-unless \`DTAG_MODEL_ROOT\` overrides the cache root.
+unless `DTAG_MODEL_ROOT` overrides the cache root.
 
 ---
 
@@ -198,20 +198,20 @@ $$
 
 In the code this is
 
-\`\`\`python
+```python
 state = resident_empty_state(model)
-\`\`\`
+```
 
 which internally evaluates the native LSM and creates a resident C++
-\`CenteredLdpPsiState\`.
+`CenteredLdpPsiState`.
 
 No empirical GSS respondent is used to create this initial state.
 
 The first figure written by the progressive simulation is
 
-\`\`\`text
+```text
 frames/000_empty.png
-\`\`\`
+```
 
 and represents $\Psi_0$.
 
@@ -259,7 +259,7 @@ not by a manually specified interaction matrix.
 
 ---
 
-## 6. Question 1: column 0 = \`"working fulltime"\`
+## 6. Question 1: column 0 = `"working fulltime"`
 
 Let source coordinate $i=0$.
 
@@ -271,9 +271,9 @@ $$
 
 The answer
 
-\`\`\`text
+```text
 working fulltime
-\`\`\`
+```
 
 is represented as the point mass
 
@@ -346,14 +346,14 @@ unchanged by this immediate response.
 
 The runtime reports
 
-\`\`\`text
+```text
 mean_tv
 max_tv
 max_col
 event_tv
 sanov_rate
 projected_count
-\`\`\`
+```
 
 for this hard observation.
 
@@ -389,9 +389,9 @@ Sanov exponent.
 
 The resulting frame is
 
-\`\`\`text
+```text
 frames/001_q1_hard.png
-\`\`\`
+```
 
 up to numbering changes caused by modifications to the choice sequence.
 
@@ -401,9 +401,9 @@ up to numbering changes caused by modifications to the choice sequence.
 
 The call uses
 
-\`\`\`python
+```python
 clamp=True
-\`\`\`
+```
 
 so the first answer becomes persistent evidence.
 
@@ -535,9 +535,9 @@ $$
 
 The example sets
 
-\`\`\`text
+```text
 random_permutation = false
-\`\`\`
+```
 
 so the same native tree order is used in every sweep.
 
@@ -648,7 +648,7 @@ the residual diagnostics or tested by continuing the trajectory.
 
 ---
 
-## 12. Question 2: column 3 = \`"yes"\`
+## 12. Question 2: column 3 = `"yes"`
 
 After five relaxation sweeps, denote the current state by
 
@@ -778,9 +778,9 @@ $$
 
 At the end the script writes
 
-\`\`\`text
+```text
 final_hard_row.csv
-\`\`\`
+```
 
 with
 
@@ -819,7 +819,7 @@ different uncertainty distributions.
 
 Conceptually, the example is
 
-\`\`\`text
+```text
 load native GSS-2018 LSM
 
 x_empty = all missing
@@ -872,7 +872,7 @@ write full trajectory diagnostics
 write coordinatewise MAP hard endpoint
 write visualization frames
 optionally assemble GIF
-\`\`\`
+```
 
 ---
 
@@ -909,12 +909,12 @@ the learned conditionals satisfying an exact global probability identity.
 
 The companion test
 
-\`\`\`bash
+```bash
 python3 applications/psisimulation/simulate_empty.py \
   --model gss/gss_2018 \
   --sweeps 1 \
   --event zero_action
-\`\`\`
+```
 
 should therefore report numerical zero movement.
 
@@ -972,12 +972,12 @@ This makes question order a scientifically meaningful perturbation variable.
 
 A useful experiment is to create
 
-\`\`\`json
+```json
 [
   {"column": 3, "value": "yes", "sweeps": 5},
   {"column": 0, "value": "working fulltime", "sweeps": 5}
 ]
-\`\`\`
+```
 
 and compare the resulting endpoint and trajectory.
 
@@ -1118,13 +1118,13 @@ The supplied script fixes $\alpha=1$, which is the unscaled learned response.
 
 The frame sequence begins with
 
-\`\`\`text
+```text
 000_empty.png
-\`\`\`
+```
 
 and then includes
 
-\`\`\`text
+```text
 q1_hard
 q1_sweep1
 ...
@@ -1133,7 +1133,7 @@ q2_hard
 q2_sweep1
 ...
 q2_sweep5
-\`\`\`
+```
 
 with numeric prefixes preserving temporal order.
 
@@ -1152,33 +1152,33 @@ coordinates.
 
 With
 
-\`\`\`text
+```text
 --gif
-\`\`\`
+```
 
 the frames are assembled into
 
-\`\`\`text
+```text
 psi_dynamics.gif
-\`\`\`
+```
 
 which is a visualization of motion through the product of simplices.
 
 ---
 
-## 22. How to read \`history.json\`
+## 22. How to read `history.json`
 
 Every hard observation and every relaxation sweep is appended to
 
-\`\`\`text
+```text
 history.json
-\`\`\`
+```
 
 with contextual metadata and native diagnostics.
 
 For a hard observation, a record includes fields such as
 
-\`\`\`json
+```json
 {
   "question": 1,
   "phase": "hard_observation",
@@ -1192,11 +1192,11 @@ For a hard observation, a record includes fields such as
   "sanov_rate": ...,
   "projected_count": ...
 }
-\`\`\`
+```
 
 For a relaxation sweep,
 
-\`\`\`json
+```json
 {
   "question": 1,
   "phase": "relaxation",
@@ -1211,7 +1211,7 @@ For a relaxation sweep,
   "max_col": ...,
   "projected_count": ...
 }
-\`\`\`
+```
 
 The most important convergence quantities are
 
@@ -1239,9 +1239,9 @@ The code projects such a vector back to the simplex.
 
 A nonzero
 
-\`\`\`text
+```text
 projected_count
-\`\`\`
+```
 
 therefore means at least one learned linear response was large enough to leave
 the feasible probability region before correction.
@@ -1266,11 +1266,11 @@ Never guess raw categorical labels.
 
 Inspect the empty-state marginal for a coordinate:
 
-\`\`\`bash
+```bash
 python3 applications/psisimulation/inspect_column.py \
   --model gss/gss_2018 \
   --column 0
-\`\`\`
+```
 
 This reports the model-supported labels and their probabilities at $\Psi_0$.
 
@@ -1278,7 +1278,7 @@ Then construct a new choice JSON using exact labels from the source maps.
 
 For example,
 
-\`\`\`json
+```json
 [
   {
     "column": 10,
@@ -1291,7 +1291,7 @@ For example,
     "sweeps": 8
   }
 ]
-\`\`\`
+```
 
 ---
 
@@ -1325,11 +1325,11 @@ $$
 
 Use the lower-level API with
 
-\`\`\`text
+```text
 event = sample
-\`\`\`
+```
 
-instead of \`mode\`, repeat many seeds, and characterize the endpoint
+instead of `mode`, repeat many seeds, and characterize the endpoint
 distribution.
 
 ### Response-scale test
@@ -1357,7 +1357,7 @@ collapsed into one notion of “equilibrium.”
 The progressive example begins at the model-implied empty state and adds
 chosen observations.
 
-\`cluster_equilibria.py\` asks a different question.
+`cluster_equilibria.py` asks a different question.
 
 It begins from many actual GSS respondent rows, constructs leave-one-coordinate
 conditional Psi states around those rows, evolves them under the same centered
@@ -1442,10 +1442,10 @@ for five sweeps.”
 
 At minimum report
 
-1. final \`mean_tv\`;
-2. final \`max_tv\`;
+1. final `mean_tv`;
+2. final `max_tv`;
 3. additional-sweep stability;
-4. \`projected_count\`;
+4. `projected_count`;
 5. empirical $n$;
 6. source ordering;
 7. response scale;
@@ -1495,7 +1495,7 @@ centered response operator.
 
 A complete record should include
 
-\`\`\`text
+```text
 model:                  gss/gss_2018
 initialization:         all-missing Psi0
 question 1:             column 0 = "working fulltime"
@@ -1512,7 +1512,7 @@ random permutation:     false
 seed:                   12345
 runtime provenance:     LSM_RUNTIME_SOURCE_COMMIT
 application provenance: PSISIM_SOURCE_COMMIT
-\`\`\`
+```
 
 For publication-quality results, also save the PsiSim git commit and the exact
 model-release identity.
@@ -1523,7 +1523,7 @@ model-release identity.
 
 The default output is
 
-\`\`\`text
+```text
 results/psisimulation/progressive/
     frames/
         000_empty.png
@@ -1533,7 +1533,7 @@ results/psisimulation/progressive/
     history.json
     final_hard_row.csv
     psi_dynamics.gif
-\`\`\`
+```
 
 The scientific record is primarily
 
@@ -1548,18 +1548,18 @@ The animation is a visualization of that record, not a substitute for it.
 
 ## 32. Minimal invariant tests after changing the runtime
 
-If the vendored LSM bindings are synchronized from \`dev-static\`, rerun at
+If the vendored LSM bindings are synchronized from `dev-static`, rerun at
 least the following checks before interpreting new results.
 
 First:
 
-\`\`\`bash
+```bash
 python3 applications/psisimulation/smoke_test.py \
   --model gss/gss_2018 \
   --column 0 \
   --value "working fulltime" \
   --threads "$(nproc)"
-\`\`\`
+```
 
 Verify:
 
@@ -1610,4 +1610,4 @@ and the centered displacement is propagated through the learned LSM
 dependency graph.
 
 That is the exact experiment implemented by
-\`gss2018_choices.json\` and \`simulate_progressive.py\`.
+`gss2018_choices.json` and `simulate_progressive.py`.
