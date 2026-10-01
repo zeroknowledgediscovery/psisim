@@ -53,6 +53,13 @@ applications/psisimulation/
 bindings/
     predict_distribution_py.cpp
     qdistance_py.cpp
+    psisim_graph_py.cpp        # PsiSim-owned; not synced from LSM
+
+webapp/                        # interactive GSS 2018 simulation (see webapp/README.md)
+    server.py
+    engine.py
+    static/
+    assets/gss/gss_2018_map.csv
 
 include/
 src/
@@ -73,6 +80,10 @@ The native runtime was vendored from
 `zeroknowledgediscovery/lsm:dev-static`.  The exact source commit is recorded
 in `LSM_RUNTIME_SOURCE_COMMIT`.  The application snapshot is independently
 recorded in `PSISIM_SOURCE_COMMIT`.
+
+The interactive webapp in `webapp/` drives the same resident
+`CenteredLdpPsiState` through `hard_observe` and `sweep` and animates the
+streamed snapshots; see [`webapp/README.md`](webapp/README.md).
 
 ---
 
@@ -1375,7 +1386,7 @@ cmake -S . -B build-tests -G Ninja \
   -DLSM_BUILD_PYTHON_BINDINGS=ON
 
 cmake --build build-tests \
-  --target predict_distribution qdistance \
+  --target predict_distribution qdistance psisim_graph \
   -j "$(nproc)"
 ```
 
@@ -1384,6 +1395,7 @@ The extensions are written to
 ```text
 bin/predict_distribution*.so
 bin/qdistance*.so
+bin/psisim_graph*.so      # learned dependency graph, used by the webapp
 ```
 
 and the PsiSim Python scripts automatically prepend `bin/` to their import

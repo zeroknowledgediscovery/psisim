@@ -18,12 +18,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y g++ cmake ninja-build python3-dev
-          python3 -m pip install --disable-pip-version-check -r applications/psisimulation/requirements.txt
+          python3 -m pip install --disable-pip-version-check -r applications/psisimulation/requirements.txt -r webapp/requirements.txt
 
       - name: Build standalone bindings
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --target predict_distribution qdistance -j "$(nproc)"
+          cmake --build build --target predict_distribution qdistance psisim_graph -j "$(nproc)"
 
       - name: Import bindings
         env:
@@ -32,9 +32,14 @@ jobs:
           python3 - <<'PY'
           import predict_distribution
           import qdistance
+          import psisim_graph
           print("predict_distribution:", predict_distribution.__file__)
           print("qdistance:", qdistance.__file__)
+          print("psisim_graph:", psisim_graph.__file__)
           PY
 
       - name: Compile Python sources
-        run: python3 -m compileall -q applications/psisimulation
+        run: python3 -m compileall -q applications/psisimulation webapp
+
+      - name: Check webapp client syntax
+        run: node --check webapp/static/app.js
