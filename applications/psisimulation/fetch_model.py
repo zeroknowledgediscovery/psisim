@@ -98,7 +98,12 @@ def fetch_model(
     root: Path | None = None,
     release: str = DEFAULT_RELEASE,
     force: bool = False,
+    progress=None,
 ) -> Path:
+    """Download, verify and install one model.
+
+    ``progress(done_bytes, total_bytes)`` is called while downloading, if given.
+    """
     key = validate_key(key)
     root = default_root() if root is None else Path(root).expanduser().resolve()
 
@@ -141,7 +146,9 @@ def fetch_model(
                         break
                     out.write(block)
                     done += len(block)
-                    if total:
+                    if progress is not None:
+                        progress(done, total)
+                    elif total:
                         print(f"    {done / total:6.1%}", end="\r", flush=True)
         print()
 

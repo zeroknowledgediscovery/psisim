@@ -1,0 +1,5 @@
+# Webapp server dependencies (in addition to applications/psisimulation/requirements.txt)
+fastapi>=0.110
+uvicorn>=0.29
+numpy
+zstandard

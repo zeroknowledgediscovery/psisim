@@ -61,4 +61,12 @@ if(LSM_BUILD_PYTHON_BINDINGS)
     ${PSISIM_RUNTIME_SOURCES}
     src/QDistance/qdistance.cpp)
   configure_psisim_binding(qdistance)
+
+  # PsiSim-owned (not synced from LSM): learned dependency graph and the
+  # propagation-only centered dynamics used by the webapp.
+  pybind11_add_module(
+    psisim_dynamics
+    bindings/psisim_dynamics_py.cpp
+    ${PSISIM_RUNTIME_SOURCES})
+  configure_psisim_binding(psisim_dynamics)
 endif()

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PsiSim · GSS 2018</title>
+<meta name="description" content="Asking one survey question updates the whole state Ψ of the GSS 2018 Large Science Model.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='14' width='5' height='14' rx='1' fill='%233987e5'/%3E%3Crect x='13.5' y='4' width='5' height='24' rx='1' fill='%23e66767'/%3E%3Crect x='23' y='18' width='5' height='10' rx='1' fill='%233987e5'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>PsiSim <span class="thin" id="title-model">· GSS 2018 Large Science Model</span></h1>
+    <p class="tagline">Asking one question updates the response distributions of the whole survey.</p>
+  </div>
+  <div class="top-actions">
+    <span class="chip" id="session-chip" title="Random seed used to draw answers">seed —</span>
+    <button class="btn ghost" id="btn-about" aria-expanded="false" aria-controls="about">How it works</button>
+    <button class="btn ghost" id="btn-export">Export</button>
+    <button class="btn" id="btn-new">New session</button>
+  </div>
+</header>
+
+<section class="survey-bar" aria-label="Choose a survey">
+  <div class="sv-current">
+    <span class="sv-kicker">Survey</span>
+    <b id="sv-name">GSS 2018</b>
+    <span class="sv-meta" id="sv-meta"></span>
+  </div>
+  <div class="sv-pick">
+    <label>Country
+      <select id="sv-country"></select>
+    </label>
+    <label>Year
+      <select id="sv-year"></select>
+    </label>
+    <div class="sv-cands" id="sv-cands" role="radiogroup" aria-label="Matching surveys"></div>
+    <button class="btn" id="sv-load">Load survey</button>
+  </div>
+  <div class="sv-progress" id="sv-progress" hidden>
+    <div class="sv-bar"><i id="sv-bar-fill"></i></div>
+    <span id="sv-progress-text"></span>
+  </div>
+</section>
+
+<section id="about" class="about" hidden>
+  <div class="about-grid">
+    <div>
+      <h3>What Ψ is</h3>
+      <p>Ψ = (p<sub>1</sub>, …, p<sub>d</sub>) holds one response distribution for every item of the selected survey's Large Science Model (LSM). Each small sparkline below is one p<sub>i</sub>: a histogram over that item's possible answers. Before any answer, Ψ = Ψ<sub>0</sub>, the distributions the trained model implies for an empty survey, and it does not move on its own.</p>
+    </div>
+    <div>
+      <h3>What asking does</h3>
+      <p>Asking item <i>i</i> draws an answer σ ~ p<sub>i</sub> from its current distribution (seeded, reproducible). p<sub>i</sub> becomes the point mass δ<sub>σ</sub> (red) and the change δ<sub>σ</sub> − p<sub>i</sub> is passed through the learned LSM links to every item whose model uses <i>i</i>, updating their distributions once. The next question is asked in this updated Ψ.</p>
+    </div>
+    <div>
+      <h3>How not to read it</h3>
+      <ul>
+        <li>Links are learned statistical dependencies between survey responses, not causal effects.</li>
+        <li>One question = one update of Ψ (the native hard observation). No further relaxation is run.</li>
+        <li>All mathematics runs in the native PsiSim runtime; the page only draws its snapshots.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+  <aside class="panel" aria-label="Choose a question">
+    <p class="ask-hint">Choose a question. An answer is drawn from its current distribution, and Ψ updates.</p>
+    <label class="search">
+      <span class="visually-hidden">Search GSS items</span>
+      <input id="search" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Search variable, question or answer…">
+    </label>
+    <div class="list-head" id="results-head">Ask next</div>
+    <p class="list-note" id="results-note"></p>
+    <ul class="results" id="results"></ul>
+  </aside>
+
+  <section class="main" aria-label="Question and state">
+    <div class="top-row">
+      <div class="question" id="question"></div>
+      <div class="mind-card" aria-label="Current mind: how far every distribution is from the empty state">
+        <div class="q-kicker">Current mind</div>
+        <div class="mind-wrap">
+          <canvas id="mind" width="184" height="184"></canvas>
+          <div class="mind-center" id="mind-center"></div>
+        </div>
+        <div class="mind-note">One spoke per question, in survey order. Longer and brighter = further from Ψ₀; red = answered.</div>
+        <ol class="asked" id="asked"></ol>
+      </div>
+    </div>
+
+    <div class="grid-head">
+      <div>
+        <h2 id="grid-title">Ψ: all marginal distributions</h2>
+        <p class="grid-sub" id="grid-sub"></p>
+      </div>
+      <div class="grid-legend" aria-hidden="true">
+        <span class="ramp-legend">change from Ψ₀ <i class="ramp"></i><span class="ticks"><span>none</span><span>0.001</span><span>0.01</span><span>0.1+</span></span></span>
+        <span><i class="lg-before"></i>before this answer</span>
+        <span><i class="lg-ans"></i>answered</span>
+        <button class="btn ghost small" id="btn-replay" disabled>Replay updates</button>
+      </div>
+    </div>
+    <div class="grid-wrap" id="grid-wrap">
+      <canvas id="grid" aria-label="Sparkline of every item's response distribution"></canvas>
+      <div class="spot-layer" id="spot-layer"></div>
+      <div class="tooltip" id="tooltip" hidden></div>
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading…</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

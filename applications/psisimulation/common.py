@@ -1,10 +1,14 @@
 """Shared helpers for Psi dynamical simulation."""
 from __future__ import annotations
 
+import gzip
+import hashlib
 import importlib
+import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -97,10 +101,83 @@ def psi0(model: Path):
     return [dict(q) for q in psi]
 
 
+def model_cache_dir() -> Path:
+    return Path(os.environ.get("PSISIM_CACHE_DIR", "~/.cache/psisim")).expanduser()
+
+
+def model_fingerprint(model: Path) -> str:
+    """Identity of everything derived model data depends on: the model's
+    trees and source maps (content) and the compiled native runtime."""
+    h = hashlib.sha256()
+    for sub in ("trees/binary", "source_maps"):
+        root = model / sub
+        for path in sorted(p for p in root.rglob("*") if p.is_file()):
+            h.update(str(path.relative_to(model)).encode())
+            with path.open("rb") as handle:
+                for block in iter(lambda: handle.read(1 << 20), b""):
+                    h.update(block)
+    for lib in sorted(BIN.glob("*.so")):
+        h.update(lib.name.encode())
+        h.update(lib.read_bytes())
+    return h.hexdigest()[:20]
+
+
+def cached_json(model: Path, kind: str, compute, *, fingerprint: str | None = None,
+                cache_dir: Path | None = None, valid=lambda value: True):
+    """Value derived from ``model``, kept in a persistent on-disk JSON cache.
+
+    The file is ``<cache>/<kind>/<family>/<name>-<fingerprint>.json.gz``, so a
+    changed model or rebuilt runtime is recomputed automatically and stale
+    entries for that model are removed. Returns (value, hit).
+    """
+    root = model_cache_dir() if cache_dir is None else Path(cache_dir)
+    fp = fingerprint or model_fingerprint(model)
+    name = model.name
+    path = root / kind / model.parent.name / f"{name}-{fp}.json.gz"
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            value = json.load(handle)
+        if valid(value):
+            return value, True
+    except (OSError, ValueError, TypeError):
+        pass
+
+    value = compute()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{kind}-", suffix=".tmp")
+        with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt", encoding="utf-8") as handle:
+            json.dump(value, handle, separators=(",", ":"))
+        os.replace(tmp, path)
+        for stale in path.parent.glob(f"{name}-*.json.gz"):
+            if stale != path:
+                stale.unlink(missing_ok=True)
+    except OSError:
+        pass  # caching is best effort
+    return value, False
+
+
+def psi0_cached(model: Path, *, fingerprint: str | None = None,
+                cache_dir: Path | None = None) -> tuple[list[dict], bool]:
+    """Psi0 from the persistent cache (computed and stored on first use).
+
+    Values round-trip exactly (JSON floats use repr) and category order is
+    preserved, so a cached Psi0 is bit-identical to a freshly computed one.
+    """
+    width = model_width(model)
+    rows, hit = cached_json(
+        model, "psi0",
+        lambda: [list(q.items()) for q in psi0(model)],
+        fingerprint=fingerprint, cache_dir=cache_dir,
+        valid=lambda v: isinstance(v, list) and len(v) == width,
+    )
+    return [dict(r) for r in rows], hit
+
+
 def resident_empty_state(model: Path):
     """Construct one resident centered-LDP state initialized at Psi0."""
     lsm = load_binding()
-    p0 = psi0(model)
+    p0, _ = psi0_cached(model)   # exact; computed once per model and runtime
     return lsm.centered_ldp_state_from_psi(
         str(model / "trees" / "binary"),
         p0,
