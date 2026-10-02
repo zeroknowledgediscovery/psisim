@@ -13,14 +13,15 @@ import engine as eng
 
 def main() -> None:
     t0 = time.perf_counter()
-    model = eng.Model(fetch=False)
+    registry = eng.ModelRegistry()
+    engine = eng.Engine(registry)
+    model = engine.default
+    links = sum(len(t) for t in model.targets)
     print(f"model ready in {time.perf_counter() - t0:.1f}s: "
-          f"{model.width} columns, {len(model.edges)} learned links")
+          f"{model.width} columns, {links} learned links")
     assert len(model.variables) == model.width
-    assert len(model.layout) == model.width
-    assert model.edges, "dependency graph is empty"
-
-    engine = eng.Engine(model)
+    assert links, "dependency graph is empty"
+    assert eng.CATALOG["models"] and eng.CATALOG["countries"], "catalog missing"
     s = engine.create(seed=12345)
     assert s.dynamics == "propagation"
     assert s.psi == model.psi0 or all(
@@ -57,6 +58,22 @@ def main() -> None:
         pass
     else:
         raise AssertionError("re-answering a clamped item must be refused")
+
+    # Another survey: downloaded from the public release on demand.
+    other = "eurobarometer/ZA7561_v1-0-0"
+    registry.start(other)
+    while registry.status(other)["state"] not in ("ready", "error"):
+        time.sleep(0.5)
+    assert registry.status(other)["state"] == "ready", registry.status(other)
+    s4 = engine.create(seed=1, model_key=other)
+    m4 = s4.model
+    assert m4.key == other and m4.width != model.width
+    assert sum(1 for v in m4.variables if v.label) > m4.width // 2, "labels missing"
+    col4 = max((v for v in m4.variables if v.learned), key=lambda v: len(m4.targets[v.column])).column
+    ev4 = list(engine.answer(s4, col4))
+    assert ev4[-1]["type"] == "done" and ev4[-1]["stats"]["moved"] > 0, ev4[-1]
+    print(f"OK: {other}: {m4.width} items; asking {m4.variables[col4].variable} "
+          f"moved {ev4[-1]['stats']['moved']} distributions")
 
     st = done["stats"]
     print(f"OK: {model.variables[col].variable} = {value!r}; "

@@ -6,8 +6,9 @@ Run from the repository root:
   python3 webapp/server.py --host 127.0.0.1 --port 8000
 
 The model is resolved (and, if needed, downloaded) once at startup. Every
-browser session owns one resident native state (by default a propagation-only
-``PropagationPsiState``); an answer is
+browser session owns one resident native state of the survey model it was
+started with (GSS 2018 by default; other countries/years are downloaded from
+the public DTAG model release on demand); an answer is
 applied with ``hard_observe(..., clamp=True)`` and its perturbation is then
 propagated wave by wave (only newly induced deltas); every snapshot is
 streamed to the browser as one NDJSON line.
@@ -33,6 +34,7 @@ STATIC = HERE / "static"
 class NewSession(BaseModel):
     seed: int | None = Field(default=None, ge=0)
     dynamics: str = eng.DEFAULT_DYNAMICS
+    model: str | None = None   # catalog key, e.g. "afrobarometer/r7"; default GSS 2018
 
 
 class Answer(BaseModel):
@@ -41,10 +43,10 @@ class Answer(BaseModel):
     empirical_n: int = eng.DEFAULT_EMPIRICAL_N  # finite-n dynamics only
 
 
-def create_app(model: eng.Model | None = None) -> FastAPI:
-    model = model or eng.Model(fetch=os.environ.get("PSISIM_NO_FETCH") != "1")
-    engine = eng.Engine(model)
-    model_json = json.dumps(model.describe(), separators=(",", ":"))
+def create_app(registry: eng.ModelRegistry | None = None) -> FastAPI:
+    registry = registry or eng.ModelRegistry(fetch=os.environ.get("PSISIM_NO_FETCH") != "1")
+    engine = eng.Engine(registry)
+    described: dict[str, str] = {}
 
     app = FastAPI(title="PsiSim", docs_url=None, redoc_url=None)
     app.state.engine = engine
@@ -55,20 +57,44 @@ def create_app(model: eng.Model | None = None) -> FastAPI:
             raise HTTPException(404, "session not found or expired")
         return s
 
+    def model_key(family: str, name: str) -> str:
+        try:
+            return registry.validate(f"{family}/{name}")
+        except eng.ModelError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    @app.get("/api/catalog")
+    def catalog():
+        """Every survey model of the public release: family, period, countries."""
+        return registry.catalog()
+
     @app.get("/api/model")
-    def get_model():
-        return Response(
-            model_json,
-            media_type="application/json",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+    def get_model(key: str = eng.DEFAULT_MODEL):
+        """Items, answer categories and Psi0 of a loaded model."""
+        try:
+            model = registry.get(registry.validate(key))
+        except eng.ModelError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if key not in described:
+            described[key] = json.dumps(model.describe(), separators=(",", ":"))
+        return Response(described[key], media_type="application/json",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+    @app.get("/api/models/{family}/{name}/status")
+    def model_status(family: str, name: str):
+        return registry.status(model_key(family, name))
+
+    @app.post("/api/models/{family}/{name}/load")
+    def load_model(family: str, name: str):
+        """Download from the public release if needed, then compute Psi0."""
+        return registry.start(model_key(family, name))
 
     @app.get("/api/health")
     def health():
         return {
             "ok": True,
-            "model": model.key,
-            "model_path": str(model.path),
+            "default_model": eng.DEFAULT_MODEL,
+            "model_root": str(eng.model_root()),
             "sessions": len(engine.sessions),
             "threads": eng.THREADS,
         }
@@ -77,7 +103,9 @@ def create_app(model: eng.Model | None = None) -> FastAPI:
     def new_session(body: NewSession | None = None):
         body = body or NewSession()
         try:
-            s = engine.create(seed=body.seed, dynamics=body.dynamics)
+            s = engine.create(seed=body.seed, dynamics=body.dynamics, model_key=body.model)
+        except eng.ModelError as exc:
+            raise HTTPException(409, str(exc)) from exc
         except eng.AnswerError as exc:
             raise HTTPException(422, str(exc)) from exc
         except RuntimeError as exc:
@@ -142,12 +170,13 @@ def main() -> None:
 
     import uvicorn
 
-    print("loading model, Psi0, dependency graph and layout ...", flush=True)
+    print("loading the default model and its Psi0 ...", flush=True)
     app = create_app()
-    m = app.state.engine.model
+    m = app.state.engine.default
     print(
         f"ready: {m.key} at {m.path} "
-        f"({m.width} columns, {len(m.edges)} learned links, {m.load_seconds:.1f}s)",
+        f"({m.width} columns, {m.load_seconds:.1f}s); "
+        f"{len(eng.CATALOG.get('models', {}))} models available on demand",
         flush=True,
     )
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

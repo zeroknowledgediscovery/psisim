@@ -11,7 +11,7 @@
 <body>
 <header class="top">
   <div class="brand">
-    <h1>PsiSim <span class="thin">· GSS 2018 Large Science Model</span></h1>
+    <h1>PsiSim <span class="thin" id="title-model">· GSS 2018 Large Science Model</span></h1>
     <p class="tagline">Asking one question updates the response distributions of the whole survey.</p>
   </div>
   <div class="top-actions">
@@ -22,11 +22,33 @@
   </div>
 </header>
 
+<section class="survey-bar" aria-label="Choose a survey">
+  <div class="sv-current">
+    <span class="sv-kicker">Survey</span>
+    <b id="sv-name">GSS 2018</b>
+    <span class="sv-meta" id="sv-meta"></span>
+  </div>
+  <div class="sv-pick">
+    <label>Country
+      <select id="sv-country"></select>
+    </label>
+    <label>Year
+      <select id="sv-year"></select>
+    </label>
+    <div class="sv-cands" id="sv-cands" role="radiogroup" aria-label="Matching surveys"></div>
+    <button class="btn" id="sv-load">Load survey</button>
+  </div>
+  <div class="sv-progress" id="sv-progress" hidden>
+    <div class="sv-bar"><i id="sv-bar-fill"></i></div>
+    <span id="sv-progress-text"></span>
+  </div>
+</section>
+
 <section id="about" class="about" hidden>
   <div class="about-grid">
     <div>
       <h3>What Ψ is</h3>
-      <p>Ψ = (p<sub>1</sub>, …, p<sub>d</sub>) holds one response distribution for every modelled GSS item. Each small sparkline below is one p<sub>i</sub>: a histogram over that item's possible answers. Before any answer, Ψ = Ψ<sub>0</sub>, the distributions the trained model implies for an empty survey, and it does not move on its own.</p>
+      <p>Ψ = (p<sub>1</sub>, …, p<sub>d</sub>) holds one response distribution for every item of the selected survey's Large Science Model (LSM). Each small sparkline below is one p<sub>i</sub>: a histogram over that item's possible answers. Before any answer, Ψ = Ψ<sub>0</sub>, the distributions the trained model implies for an empty survey, and it does not move on its own.</p>
     </div>
     <div>
       <h3>What asking does</h3>
@@ -88,7 +110,7 @@
       <div class="tooltip" id="tooltip" hidden></div>
       <div class="loading" id="loading">
         <div class="spinner"></div>
-        <p id="loading-text">Loading the GSS 2018 model…</p>
+        <p id="loading-text">Loading…</p>
       </div>
     </div>
   </section>

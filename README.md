@@ -58,11 +58,13 @@ bindings/
 tests/
     test_propagation_dynamics.py
 
-webapp/                        # interactive GSS 2018 simulation (see webapp/README.md)
+webapp/                        # interactive survey simulation (see webapp/README.md)
     server.py
     engine.py
+    build_catalog.py
     static/
-    assets/gss/gss_2018_map.csv
+    assets/catalog.json        # public DTAG models by country and year
+    assets/metadata/           # item labels per model
 
 include/
 src/

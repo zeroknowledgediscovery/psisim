@@ -266,6 +266,27 @@ def test_clamped_coordinates_never_change():
         raise AssertionError("re-observing a clamped coordinate must fail")
 
 
+def test_soft_mixture_equals_enumeration():
+    """Large deltas use one soft-evidence pass per sign; same result."""
+    m = model()
+    v = max(initial_psi(), key=len)            # the item with most categories
+    col = list(initial_psi()).index(v)
+    value = max(v.items(), key=lambda kv: kv[1])[0]
+    assert len(v) > 12
+
+    def run(exact_max_support):
+        st = pdx.PropagationPsiState(str(m / "trees" / "binary"), str(m),
+                                     list(initial_psi()),
+                                     exact_max_support=exact_max_support)
+        st.hard_observe(col, value, threads=THREADS)
+        st.wave(threads=THREADS)                   # later waves too
+        return st.to_python()
+
+    enumerated, soft = run(10**9), run(1)
+    worst = max(max_abs(diff(a, b)) for a, b in zip(enumerated, soft))
+    assert worst < 1e-12, f"soft mixture deviates from enumeration by {worst}"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in tests:

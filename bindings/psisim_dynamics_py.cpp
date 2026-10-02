@@ -33,7 +33,19 @@
 //
 //    The kernel, response accumulation and simplex projection reproduce the
 //    vendored CenteredLdpPsiState operator exactly (wave 0 equals
-//    CenteredLdpPsiState.hard_observe; see webapp/tests).
+//    CenteredLdpPsiState.hard_observe; see tests/).
+//
+//    Large deltas. sum_s Delta(s) K(.|s) is linear in Delta. When Delta has
+//    more than `exact_max_support` categories, it is split into its positive
+//    and negative parts, m+ q+ - m- q-, and each mixture sum_s q(s) K(.|s) is
+//    evaluated with ONE native soft-evidence pass (PredictDistribution::
+//    predictSoft) on a row whose other columns carry a code no split contains,
+//    i.e. are missing exactly as in the hard kernel row. predictSoft routes
+//    each category's mass exactly once (also for repeated splits) and
+//    marginalises unresolved codes by the same learned subtree mass as hard
+//    missing-value inference, so the result equals the enumeration up to
+//    floating-point summation order, at the cost of one tree pass instead of
+//    one per category.
 
 #include "PredictDistribution/PredictDistribution.h"
 #include "SourceMaps/SourceMaps.h"
@@ -235,6 +247,56 @@ ProbabilityDistribution centered_response(
     return response;
 }
 
+// Code used for "missing" columns in soft rows: never part of a split subset.
+constexpr int SOFT_MISSING = -1;
+
+struct MixturePart {
+    double weight = 0.0;                     // signed mass
+    int code = 0;                            // single category: use the kernel
+    std::shared_ptr<const ProbabilityRow> row;  // otherwise: soft row
+};
+
+// Decompose delta at `source` into signed mixture parts (see header).
+std::vector<MixturePart> mixture_parts(const ProbabilityDistribution& delta,
+                                       int source, size_t width) {
+    std::vector<MixturePart> parts;
+    for (int sign : {1, -1}) {
+        ProbabilityDistribution q;
+        double mass = 0.0;
+        for (const auto& kv : delta) {
+            const double v = sign * kv.second;
+            if (v > 1e-18) { q[kv.first] = v; mass += v; }
+        }
+        if (!(mass > 0.0)) continue;
+        MixturePart part;
+        part.weight = sign * mass;
+        if (q.size() == 1) {
+            part.code = q.begin()->first;
+        } else {
+            for (auto& kv : q) kv.second /= mass;
+            auto row = std::make_shared<ProbabilityRow>(width, ProbabilityDistribution{{SOFT_MISSING, 1.0}});
+            (*row)[static_cast<size_t>(source)] = std::move(q);
+            part.row = std::move(row);
+        }
+        parts.push_back(std::move(part));
+    }
+    return parts;
+}
+
+ProbabilityDistribution mixture_response(
+        PredictDistribution& predictor, KernelCache& cache,
+        int source, int target, const std::vector<MixturePart>& parts,
+        size_t width) {
+    ProbabilityDistribution response;
+    for (const auto& part : parts) {
+        const ProbabilityDistribution q = part.row
+            ? predictor.predictSoft(target, *part.row)
+            : cache.get(predictor, source, target, part.code, width);
+        for (const auto& out : q) response[out.first] += part.weight * out.second;
+    }
+    return response;
+}
+
 ProbabilityDistribution apply_response(
         const ProbabilityDistribution& current,
         const ProbabilityDistribution& response,
@@ -318,14 +380,16 @@ public:
                         const std::string& run_dir,
                         py::object psi_obj,
                         int cols_per_shard,
-                        std::vector<int> tree_ids)
+                        std::vector<int> tree_ids,
+                        int exact_max_support)
         : treesDir_(fs::absolute(trees_dir)),
           runDir_(run_dir.empty()
                       ? sourcemaps::SourceMapStore::inferRunDir(treesDir_)
                       : fs::absolute(run_dir)),
           store_(runDir_, cols_per_shard),
           treeIds_(std::move(tree_ids)),
-          predictor_(std::make_shared<PredictDistribution>(treesDir_.string())) {
+          predictor_(std::make_shared<PredictDistribution>(treesDir_.string())),
+          exactMaxSupport_(exact_max_support) {
         if (!fs::exists(runDir_ / "source_maps")) {
             throw std::runtime_error("run_dir must contain source_maps/");
         }
@@ -520,6 +584,14 @@ private:
         std::vector<std::pair<int, std::vector<int>>> jobs(
             incoming.begin(), incoming.end());
 
+        // Large deltas: precompute the soft-mixture decomposition once per source.
+        std::map<int, std::vector<MixturePart>> plans;
+        for (const auto& kv : sources) {
+            if (static_cast<int>(kv.second.size()) > exactMaxSupport_) {
+                plans[kv.first] = mixture_parts(kv.second, kv.first, width);
+            }
+        }
+
         const int nt = threads > 0 ? threads : omp_get_max_threads();
         std::atomic<int> projected_count{0};
         std::atomic<bool> failed{false};
@@ -534,9 +606,12 @@ private:
                 const auto& from = jobs[static_cast<size_t>(k)].second;
                 ProbabilityDistribution total;
                 for (int source : from) {
-                    const ProbabilityDistribution r = centered_response(
-                        *predictor_, cache_, source, target,
-                        sources.at(source), width);
+                    const auto plan = plans.find(source);
+                    const ProbabilityDistribution r = plan == plans.end()
+                        ? centered_response(*predictor_, cache_, source, target,
+                                            sources.at(source), width)
+                        : mixture_response(*predictor_, cache_, source, target,
+                                           plan->second, width);
                     if (from.size() == 1) {
                         total = r;
                     } else {
@@ -607,6 +682,7 @@ private:
     std::unordered_set<int> learned_;
     std::shared_ptr<PredictDistribution> predictor_;
     KernelCache cache_;
+    int exactMaxSupport_ = 12;
     ProbabilityRow psi_;
     std::vector<std::vector<int>> targets_;
     std::map<int, ProbabilityDistribution> pending_;
@@ -628,12 +704,13 @@ PYBIND11_MODULE(psisim_dynamics, m) {
     py::class_<PropagationPsiState, std::unique_ptr<PropagationPsiState>>(
             m, "PropagationPsiState")
         .def(py::init<const std::string&, const std::string&, py::object,
-                      int, std::vector<int>>(),
+                      int, std::vector<int>, int>(),
              py::arg("trees_dir"),
              py::arg("run_dir"),
              py::arg("psi"),
              py::arg("cols_per_shard") = 50000,
              py::arg("tree_ids") = std::vector<int>{},
+             py::arg("exact_max_support") = 12,
              "Resident propagation-only state initialised at a raw-label Psi.")
         .def("hard_observe",
              [](PropagationPsiState& self, int source, py::object value,

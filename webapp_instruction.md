@@ -61,6 +61,18 @@ gss/gss_2018
 
 with the existing PsiSim model resolver.
 
+### Other surveys: country and year
+
+Besides GSS 2018, the webapp offers every model of the public DTAG model
+release, selected by country and year as DTAG's own recommender does (GSS by
+year for the United States; Afrobarometer rounds, Eurobarometer waves and the
+pooled WVS7 model for the countries they cover, by fieldwork period). The
+chosen model is downloaded on demand and the session starts at that model's
+own $\Psi_0$; no persona or country conditioning is applied. Item names,
+counts and answer categories come from the model; readable labels come from
+DTAG's semantic maps, compiled into `webapp/assets/` by
+`webapp/build_catalog.py`.
+
 ### Model installation location
 
 `applications/psisimulation/common.py::resolve_model()` accepts either a local
@@ -130,14 +142,15 @@ scripts/build_gss_native_map.py
 
 which combines the native model feature list with the GSS 1972--2018 codebook.
 
-The standalone PsiSim webapp should not require a live DTAG checkout. Copy or
-generate the required metadata into a PsiSim-owned asset, for example
+The standalone PsiSim webapp should not require a live DTAG checkout. The
+required metadata is compiled into PsiSim-owned assets,
 
 ```text
-webapp/assets/gss/gss_2018_map.csv
+webapp/assets/catalog.json          # models, periods, countries
+webapp/assets/metadata/<family>/<name>.json.gz   # item labels per model
 ```
 
-and record its provenance.
+by `webapp/build_catalog.py`, with provenance in `webapp/assets/PROVENANCE.md`.
 
 Each UI variable record should retain:
 

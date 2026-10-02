@@ -37,6 +37,7 @@ const SPOT_MIN_TV = 0.002;
 const NEXT_MAX = 14;         // rows in the "ask next" list
 
 const S = {
+  catalog: null, modelKey: null,
   model: null, vars: [], n: 0, psi0: [],
   psi: [], sid: null, seed: null,
   observed: [],              // [{column, variable, value, question, u}]
@@ -96,8 +97,9 @@ async function api(path, opts = {}) {
   return res;
 }
 
-async function loadModel() {
-  const m = await (await api("/api/model")).json();
+async function loadModel(key) {
+  const m = await (await api(`/api/model?key=${encodeURIComponent(key)}`)).json();
+  S.modelKey = m.model;
   S.model = m;
   S.vars = m.variables;
   S.n = m.width;
@@ -110,7 +112,10 @@ async function loadModel() {
   // change in shape is a change in the distribution.
   S.order = S.psi0.map((p) => p.map((_, k) => k).sort((a, b) => p[b] - p[a] || a - b));
   S.scale = S.psi0.map((p) => Math.min(1, Math.max(...p) * 1.25) || 1);
+  renderSurveyHead();
 }
+
+function modelLabel() { return (S.model && S.model.info && S.model.info.label) || S.modelKey || "the survey"; }
 
 function makeLast(column, value, u, before, tvArr, question) {
   const changed = [];
@@ -119,7 +124,8 @@ function makeLast(column, value, u, before, tvArr, question) {
   return { column, value, u, before, tv: tvArr, changed, question };
 }
 
-function applySession(view) {
+async function applySession(view) {
+  if (view.model && view.model !== S.modelKey) await loadModel(view.model);
   S.sid = view.session_id;
   S.seed = view.seed;
   S.psi = view.psi;
@@ -142,11 +148,11 @@ function applySession(view) {
   $("session-chip").textContent = `seed ${S.seed}`;
 }
 
-async function newSession(seed) {
+async function newSession(seed, modelKey) {
   showLoading("Starting a new session at Ψ₀…");
   try {
-    const body = JSON.stringify(seed != null ? { seed } : {});
-    applySession(await (await api("/api/session", { method: "POST", body })).json());
+    const body = JSON.stringify({ ...(seed != null ? { seed } : {}), model: modelKey || S.modelKey || undefined });
+    await applySession(await (await api("/api/session", { method: "POST", body })).json());
   } finally { hideLoading(); }
   cancelSpots();
   renderAll();
@@ -156,7 +162,7 @@ async function restoreOrCreate() {
   const sid = store.get("psisim.sid");
   if (sid) {
     try {
-      applySession(await (await api(`/api/session/${encodeURIComponent(sid)}`)).json());
+      await applySession(await (await api(`/api/session/${encodeURIComponent(sid)}`)).json());
       renderAll();
       return;
     } catch { store.del("psisim.sid"); }
@@ -174,6 +180,7 @@ async function ask(col) {
   S.busy = true;
   cancelSpots();
   renderResults();
+  if (S.catalog) renderCandidates();
   const before = S.psi;
   renderQuestion({ phase: "asking", column: col, p: before[col] });
   renderSummaryPending();
@@ -197,6 +204,7 @@ async function ask(col) {
     S.busy = false;
     renderQuestion({ phase: "error", message: err.message });
     renderResults();
+    if (S.catalog) renderCandidates();
     return;
   }
 
@@ -223,6 +231,7 @@ async function ask(col) {
   renderGridHead();
   renderMindText();
   S.busy = false;
+  if (S.catalog) renderCandidates();
 
   // 4. the largest updates pop out one by one
   await sleep(reduceMotion ? 0 : 450);
@@ -290,7 +299,7 @@ function renderQuestion(st) {
     if (S.last) { renderQuestion({ phase: "result" }); return; }
     el.innerHTML = `<div class="q-intro">
       <div class="q-kicker">No answers yet</div>
-      <p><b>No answers have been supplied. Every sparkline below is showing the response distribution implied by the GSS 2018 LSM from the empty state.</b></p>
+      <p><b>No answers have been supplied. Every sparkline below is showing the response distribution implied by the ${esc(modelLabel())} LSM from the empty state.</b></p>
       <p>Choose a question from <i>Ask next</i> on the left (or click any sparkline). An answer is drawn from its current distribution, that distribution becomes a single red bar, and the change is passed to every related question. Ψ<sub>0</sub> does not move until something is asked.</p>
     </div>`;
     return;
@@ -402,7 +411,7 @@ function layoutGrid() {
   } else {
     wrap.style.height = "";
     const H = wrap.clientHeight;
-    for (let cols = 8; cols <= 120; cols++) {
+    for (let cols = Math.max(8, Math.ceil((W + gap) / (72 + gap))); cols <= 120; cols++) {
       const cw = Math.floor((W - gap * (cols - 1)) / cols);
       if (cw < 15) break;
       const ch = Math.max(10, Math.round(cw / aspect));
@@ -753,8 +762,20 @@ function searchVars(q) {
 // Unasked questions, most shifted by the answers so far first.
 function nextVars() {
   if (!S.observed.length) {
-    return SUGGESTED.map((name) => S.vars.find((v) => v.variable.toLowerCase() === name))
-      .filter((v) => v && v.learned).map((v) => ({ v, hit: "" }));
+    const sug = SUGGESTED.map((name) => S.vars.find((v) => v.variable.toLowerCase() === name))
+      .filter((v) => v && v.learned);
+    if (sug.length >= 6) return sug.map((v) => ({ v, hit: "" }));
+    // other surveys: labelled questions with a handful of answers whose
+    // answer is genuinely open at Psi0 (normalised entropy) and that many
+    // other items depend on; administrative items are near-certain at Psi0.
+    const score = (v) => {
+      const p = S.psi0[v.column];
+      const h = -p.reduce((a, x) => a + (x > 0 ? x * Math.log(x) : 0), 0) / Math.log(p.length);
+      return h * Math.log1p(v.out_degree);
+    };
+    return S.vars.filter((v) => v.learned && v.label && v.categories.length >= 2 && v.categories.length <= 10)
+      .map((v) => [score(v), v]).sort((a, b) => b[0] - a[0] || a[1].column - b[1].column)
+      .slice(0, NEXT_MAX).map(([, v]) => ({ v, hit: "" }));
   }
   const idx = [];
   for (let i = 0; i < S.n; i++) if (S.vars[i].learned && !observedRecord(i) && S.drift[i] > MOVED) idx.push(i);
@@ -776,7 +797,9 @@ function renderResults() {
     ? `${list.length}${list.length === 60 ? "+" : ""} matching questions` : "Ask next";
   $("results-note").textContent = searching ? ""
     : S.observed.length ? "Unasked questions whose distributions the answers so far have moved most. Click one to ask it."
-      : "Nothing asked yet. Start with one of these.";
+      : S.vars.some((v) => SUGGESTED.includes(v.variable.toLowerCase()))
+        ? "Nothing asked yet. Start with one of these."
+        : "Nothing asked yet. These are open questions that many other items depend on.";
   $("results").innerHTML = list.length ? list.map(({ v, hit }) => {
     const done = observedRecord(v.column);
     const i = v.column;
@@ -809,6 +832,156 @@ function renderAll() {
 
 function showLoading(t) { $("loading-text").textContent = t; $("loading").hidden = false; }
 function hideLoading() { $("loading").hidden = true; }
+
+// ---------------------------------------------------------------------------
+// survey picker: country + year -> public DTAG model (downloaded on demand)
+// ---------------------------------------------------------------------------
+
+// Same ranking as DTAG's recommender: time fit (within a year, within three,
+// further), then strength of geographic coverage, then distance, then recency.
+const GEO_STRENGTH = { gss: 2.5, afrobarometer: 3, eurobarometer: 3, wvs: 1 };
+const PICK = { country: null, year: null, choice: null, polling: 0 };
+
+function periodText(m) {
+  if (m.date) return m.date;
+  if (!m.period) return "dates unknown";
+  return m.period[0] === m.period[1] ? `${m.period[0]}` : `${m.period[0]}–${m.period[1]}`;
+}
+function mb(bytes) { return bytes ? `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB` : ""; }
+
+function candidates(ckey, year) {
+  const cat = S.catalog.models;
+  const keys = (S.catalog.countries[ckey] || {}).models || [];
+  const cmp = (a, b) => { for (let i = 0; i < a.sk.length; i++) if (a.sk[i] !== b.sk[i]) return a.sk[i] - b.sk[i]; return 0; };
+  const best = {};
+  for (const key of keys) {
+    const m = cat[key];
+    if (!m || !m.period) continue;
+    let d = 0;
+    if (year != null) d = year < m.period[0] ? m.period[0] - year : year > m.period[1] ? year - m.period[1] : 0;
+    if (m.family === "eurobarometer" && !m.auto_select) d += 50;   // cumulative files last
+    const bucket = d <= 1 ? 0 : d <= 3 ? 1 : 2;
+    const sk = [bucket, -(GEO_STRENGTH[m.family] || 0), d, -m.period[1]];
+    const cand = { key, m, d, sk };
+    if (!best[m.family] || cmp(cand, best[m.family]) < 0) best[m.family] = cand;
+  }
+  return Object.values(best).sort(cmp);
+}
+
+function yearsFor(ckey) {
+  const ys = new Set();
+  for (const key of (S.catalog.countries[ckey] || {}).models || []) {
+    const m = S.catalog.models[key];
+    if (!m || !m.period || (m.family === "eurobarometer" && !m.auto_select)) continue;
+    for (let y = m.period[0]; y <= m.period[1]; y++) ys.add(y);
+  }
+  return [...ys].sort((a, b) => b - a);
+}
+
+function setupSurveyPicker() {
+  const cs = Object.entries(S.catalog.countries).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  $("sv-country").innerHTML = cs.map(([k, v]) => `<option value="${esc(k)}">${esc(v.name)}</option>`).join("");
+  $("sv-country").addEventListener("change", () => { PICK.country = $("sv-country").value; PICK.year = null; renderYears(); });
+  $("sv-year").addEventListener("change", () => {
+    PICK.year = $("sv-year").value === "" ? null : +$("sv-year").value;
+    PICK.choice = null;
+    renderCandidates();
+  });
+  $("sv-cands").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-key]");
+    if (!b) return;
+    PICK.choice = b.dataset.key;
+    renderCandidates();
+  });
+  $("sv-load").addEventListener("click", () => { if (PICK.choice) loadSurvey(PICK.choice); });
+}
+
+function renderYears() {
+  const ys = yearsFor(PICK.country);
+  $("sv-year").innerHTML = `<option value="">latest</option>` +
+    ys.map((y) => `<option value="${y}" ${y === PICK.year ? "selected" : ""}>${y}</option>`).join("");
+  PICK.choice = null;
+  renderCandidates();
+}
+
+function renderCandidates() {
+  const list = candidates(PICK.country, PICK.year);
+  if (!PICK.choice || !list.some((c) => c.key === PICK.choice)) PICK.choice = list.length ? list[0].key : null;
+  $("sv-cands").innerHTML = list.map(({ key, m, d }) => {
+    const pooled = m.family !== "gss" && m.countries.length > 1 ? ` · pooled, ${m.countries.length} countries` : "";
+    const off = d % 50;
+    const fit = PICK.year == null || off === 0 ? "" : ` · ${off} yr from ${PICK.year}`;
+    const state = key === S.modelKey ? "current" : m.loaded ? "loaded" : m.installed ? "on disk" : mb(m.archive_bytes);
+    return `<button class="sv-cand${key === S.modelKey ? " current" : ""}" role="radio" aria-checked="${key === PICK.choice}" data-key="${esc(key)}"
+      title="${esc(m.family_label)}: ${esc(periodText(m))}${esc(pooled)}">${esc(m.label)}<small>${esc(periodText(m))}${esc(fit)}${esc(pooled)} · ${esc(state)}</small></button>`;
+  }).join("") || `<span class="sv-meta">No survey model covers this country.</span>`;
+  const btn = $("sv-load");
+  btn.disabled = !PICK.choice || PICK.polling > 0 || S.busy;
+  btn.title = S.busy ? "Wait for the current answer to finish" : "";
+  btn.textContent = PICK.choice === S.modelKey ? "Restart at Ψ₀" : "Load survey";
+}
+
+function syncPickerToModel() {
+  const m = S.model && S.model.info;
+  if (!m) return;
+  if (!PICK.country || !(m.countries || []).includes(PICK.country)) {
+    PICK.country = (m.countries || [])[0] || Object.keys(S.catalog.countries)[0];
+  }
+  $("sv-country").value = PICK.country;
+  renderYears();
+  if (m.period) {
+    PICK.year = m.period[1];
+    $("sv-year").value = String(PICK.year);
+  }
+  PICK.choice = S.modelKey;
+  renderCandidates();
+}
+
+function renderSurveyHead() {
+  const m = (S.model && S.model.info) || {};
+  const learned = S.vars.filter((v) => v.learned).length;
+  $("sv-name").textContent = m.label || S.modelKey;
+  const pooled = m.family && m.family !== "gss" && (m.countries || []).length > 1
+    ? ` · pooled across ${m.countries.length} countries (country is one of its questions)` : "";
+  $("sv-meta").textContent = `${m.family_label || ""} · ${periodText(m)} · ${learned.toLocaleString()} questions${pooled}`;
+  $("title-model").textContent = `· ${m.label || S.modelKey} Large Science Model`;
+  document.title = `PsiSim · ${m.label || S.modelKey}`;
+}
+
+async function loadSurvey(key) {
+  if (S.busy || PICK.polling) return;
+  const token = ++PICK.polling;
+  const prog = $("sv-progress"), fill = $("sv-bar-fill"), text = $("sv-progress-text");
+  const [fam, name] = key.split("/");
+  const show = (frac, msg) => { prog.hidden = false; fill.style.width = `${Math.round(100 * frac)}%`; text.textContent = msg; };
+  renderCandidates();
+  try {
+    let st = await (await api(`/api/models/${encodeURIComponent(fam)}/${encodeURIComponent(name)}/load`, { method: "POST" })).json();
+    while (st.state !== "ready") {
+      if (st.state === "error") throw new Error(st.message || "could not load the model");
+      if (st.state === "downloading") {
+        show(st.progress || 0, `Downloading ${S.catalog.models[key].label} from the public model release… ` +
+          (st.total_bytes ? `${mb(st.done_bytes)} of ${mb(st.total_bytes)}` : ""));
+      } else {
+        show(1, `${st.state === "loading" ? "Computing Ψ₀ from the empty survey" : "Preparing"}…`);
+      }
+      await sleep(400);
+      st = await (await api(`/api/models/${encodeURIComponent(fam)}/${encodeURIComponent(name)}/status`)).json();
+    }
+    show(1, "Starting a session at Ψ₀…");
+    const old = S.sid;
+    cancelSpots();
+    await newSession(null, key);
+    if (old) api(`/api/session/${encodeURIComponent(old)}`, { method: "DELETE" }).catch(() => {});
+    S.catalog.models[key].loaded = S.catalog.models[key].installed = true;
+    prog.hidden = true;
+  } catch (err) {
+    show(0, `Could not load: ${err.message}`);
+  } finally {
+    if (token === PICK.polling) PICK.polling = 0;
+    renderCandidates();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // wiring
@@ -863,10 +1036,13 @@ async function main() {
   wire();
   setupGrid();
   setupMind();
-  showLoading("Loading the GSS 2018 model…");
+  showLoading("Loading the survey catalog and model…");
   try {
-    await loadModel();
+    S.catalog = await (await api("/api/catalog")).json();
+    setupSurveyPicker();
+    await loadModel(S.catalog.default_model || "gss/gss_2018");
     await restoreOrCreate();
+    syncPickerToModel();
     hideLoading();
   } catch (err) {
     showLoading(`Could not start: ${err.message}`);

@@ -20,8 +20,7 @@ not the default relaxation.
 """
 from __future__ import annotations
 
-import csv
-import hashlib
+import gzip
 import json
 import os
 import secrets
@@ -38,6 +37,7 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 sys.path.insert(0, str(REPO_ROOT / "applications" / "psisimulation"))
 
+from fetch_model import fetch_model  # noqa: E402
 from common import (  # noqa: E402
     BIN,
     load_binding,
@@ -47,15 +47,9 @@ from common import (  # noqa: E402
     tree_ids,
 )
 
-MODEL_KEY = os.environ.get("PSISIM_MODEL", "gss/gss_2018")
-METADATA_CSV = Path(
-    os.environ.get(
-        "PSISIM_METADATA", HERE / "assets" / "gss" / "gss_2018_map.csv"
-    )
-)
-CACHE_DIR = Path(
-    os.environ.get("PSISIM_WEBAPP_CACHE", "~/.cache/psisim/webapp")
-).expanduser()
+ASSETS = HERE / "assets"
+CATALOG_JSON = ASSETS / "catalog.json"
+METADATA_ROOT = ASSETS / "metadata"
 
 DYNAMICS = {
     "propagation": {
@@ -125,64 +119,6 @@ def tv_array(a: list[dict], b: list[dict]) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# Graph layout (computed once per model, cached on disk)
-# ---------------------------------------------------------------------------
-
-
-def force_layout(
-    n: int, edges: list[tuple[int, int]], iterations: int = 300, seed: int = 7
-) -> np.ndarray:
-    """Readable "pond" layout of the undirected learned dependency graph.
-
-    A degree-normalised force layout places linked items near each other;
-    radii are then rank-equalised so the disc is evenly filled (densely
-    connected items towards the centre, sparsely connected ones outside).
-    Positions carry no model meaning: screen distance is not a metric of the
-    LSM and not a propagation time.
-    """
-    rng = np.random.default_rng(seed)
-    adj = np.zeros((n, n), dtype=np.float32)
-    for s, t in edges:
-        adj[s, t] = adj[t, s] = 1.0
-    degree = adj.sum(1)
-    connected = degree > 0
-    pos = np.zeros((n, 2), dtype=np.float32)
-
-    idx = np.flatnonzero(connected)
-    m = len(idx)
-    if m:
-        d = degree[idx]
-        w = adj[np.ix_(idx, idx)] / np.sqrt(np.outer(d, d))
-        p = rng.normal(size=(m, 2)).astype(np.float32)
-        temp = 1.0
-        for _ in range(iterations):
-            delta = p[:, None, :] - p[None, :, :]
-            dist = np.sqrt((delta**2).sum(-1)) + np.float32(1e-3)
-            rep = 1.0 / dist**1.5
-            att = w * np.log1p(dist) / dist * np.float32(0.35 * m)
-            force = ((rep - att)[:, :, None] * delta).sum(1)
-            force -= np.float32(0.02 * m) * p
-            length = np.sqrt((force**2).sum(-1, keepdims=True)) + np.float32(1e-9)
-            p += force / length * np.minimum(length, np.float32(temp))
-            temp = max(0.005, temp * 0.99)
-        p -= np.median(p, 0)
-        radius = np.sqrt((p**2).sum(1))
-        angle = np.arctan2(p[:, 1], p[:, 0])
-        rank = np.argsort(np.argsort(radius))
-        r_eq = np.sqrt((rank + 0.5) / m)
-        pos[idx, 0] = r_eq * np.cos(angle)
-        pos[idx, 1] = r_eq * np.sin(angle)
-
-    # Coordinates without learned links sit on an outer ring.
-    lonely = np.flatnonzero(~connected)
-    if len(lonely):
-        angle = np.linspace(0, 2 * np.pi, len(lonely), endpoint=False)
-        pos[lonely, 0] = 1.15 * np.cos(angle)
-        pos[lonely, 1] = 1.15 * np.sin(angle)
-    return pos
-
-
-# ---------------------------------------------------------------------------
 # Model (shared, read-only)
 # ---------------------------------------------------------------------------
 
@@ -194,14 +130,54 @@ class Variable:
     label: str
     question_text: str
     categories: list[str]
-    label_source_year: str
     learned: bool
 
 
+def load_catalog() -> dict:
+    try:
+        return json.loads(CATALOG_JSON.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"models": {}, "countries": {}, "default_model": "gss/gss_2018"}
+
+
+CATALOG = load_catalog()
+DEFAULT_MODEL = os.environ.get("PSISIM_MODEL", CATALOG.get("default_model", "gss/gss_2018"))
+
+
+def model_root() -> Path:
+    return Path(os.environ.get("DTAG_MODEL_ROOT", "~/.cache/dtag/models")).expanduser().resolve()
+
+
+def is_installed(key: str) -> bool:
+    local = model_root() / key
+    return (local / "source_maps").is_dir() and (local / "trees" / "binary").is_dir()
+
+
+def load_labels(key: str) -> dict[str, list[str]]:
+    """{variable: [short label, question text]} built from DTAG's maps."""
+    fam, _, name = key.partition("/")
+    path = METADATA_ROOT / fam / f"{name}.json.gz"
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {}
+
+
+def source_map_columns(model: Path) -> dict[int, dict]:
+    """{column: {column_header, column_strings_map}} from the native source maps."""
+    out: dict[int, dict] = {}
+    for shard in sorted((model / "source_maps" / "json_shards").glob("*.json")):
+        for k, v in json.loads(shard.read_text(encoding="utf-8")).items():
+            out[int(k)] = v
+    return out
+
+
 class Model:
-    def __init__(self, key: str = MODEL_KEY, fetch: bool = True):
+    def __init__(self, key: str = DEFAULT_MODEL, fetch: bool = True):
         t0 = time.perf_counter()
         self.key = key
+        self.info = dict(CATALOG.get("models", {}).get(key, {}))
         self.path = resolve_model(key, fetch=fetch)
         self.trees_dir = self.path / "trees" / "binary"
         self.tree_ids = tree_ids(self.path)
@@ -219,39 +195,32 @@ class Model:
         self.dynamics = load_dynamics_binding()
         used = self.dynamics.used_columns(str(self.trees_dir), self.tree_ids)
         learned = set(self.tree_ids)
-        self.edges: list[tuple[int, int]] = sorted(
-            (s, t)
-            for t, sources in used.items()
-            for s in sources
-            if s != t and 0 <= s < self.width and s in learned
-        )
         self.targets = [[] for _ in range(self.width)]
         self.sources = [[] for _ in range(self.width)]
-        for s, t in self.edges:
-            self.targets[s].append(t)
-            self.sources[t].append(s)
-
-        self.layout = self._layout()
+        for t, srcs in used.items():
+            for s in srcs:
+                if s != t and 0 <= s < self.width and s in learned:
+                    self.targets[s].append(t)
+                    self.sources[t].append(s)
         self.load_seconds = time.perf_counter() - t0
 
     def _load_metadata(self) -> list[Variable]:
-        rows: dict[int, dict] = {}
-        if METADATA_CSV.is_file():
-            with METADATA_CSV.open(newline="", encoding="utf-8") as handle:
-                for row in csv.DictReader(handle):
-                    rows[int(row["column"])] = row
+        cols = source_map_columns(self.path)
+        labels = load_labels(self.key)
+        lower = {k.lower(): v for k, v in labels.items()}
         learned = set(self.tree_ids)
         out = []
         for col in range(self.width):
-            row = rows.get(col, {})
+            entry = cols.get(col, {})
+            name = str(entry.get("column_header") or f"col{col}")
+            lab = labels.get(name) or lower.get(name.lower()) or ["", ""]
             out.append(
                 Variable(
                     column=col,
-                    variable=row.get("variable") or f"col{col}",
-                    label=row.get("label", ""),
-                    question_text=row.get("question_text", ""),
-                    categories=json.loads(row.get("categories") or "[]"),
-                    label_source_year=row.get("label_source_year", ""),
+                    variable=name,
+                    label=lab[0],
+                    question_text=lab[1],
+                    categories=[c for c in entry.get("column_strings_map", []) if c != ""],
                     learned=col in learned,
                 )
             )
@@ -263,24 +232,6 @@ class Model:
             for sym in q:
                 if sym not in var.categories:
                     var.categories.append(sym)
-
-    def _layout(self) -> np.ndarray:
-        digest = hashlib.sha256(
-            json.dumps([self.width, self.edges]).encode()
-        ).hexdigest()[:16]
-        cache = CACHE_DIR / f"layout_v2_{self.key.replace('/', '_')}_{digest}.json"
-        if cache.is_file():
-            try:
-                return np.asarray(json.loads(cache.read_text()), dtype=float)
-            except (OSError, ValueError):
-                pass
-        pos = force_layout(self.width, self.edges).astype(float)
-        try:
-            cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_text(json.dumps(np.round(pos, 5).tolist()))
-        except OSError:
-            pass
-        return pos
 
     # -- encoding ---------------------------------------------------------
 
@@ -300,6 +251,7 @@ class Model:
     def describe(self) -> dict:
         return {
             "model": self.key,
+            "info": self.info,
             "width": self.width,
             "variables": [
                 {
@@ -308,15 +260,12 @@ class Model:
                     "label": v.label,
                     "question_text": v.question_text,
                     "categories": v.categories,
-                    "label_source_year": v.label_source_year,
                     "learned": v.learned,
                     "out_degree": len(self.targets[v.column]),
                     "in_degree": len(self.sources[v.column]),
                 }
                 for v in self.variables
             ],
-            "edges": [x for e in self.edges for x in e],
-            "layout": np.round(self.layout, 4).ravel().tolist(),
             "psi0": self.encode(self.psi0),
             "defaults": {
                 "dynamics": DEFAULT_DYNAMICS,
@@ -343,6 +292,123 @@ class Model:
 
 
 # ---------------------------------------------------------------------------
+# Model registry: download from the public release on demand, load, cache
+# ---------------------------------------------------------------------------
+
+MAX_MODELS = max(1, env_int("PSISIM_MAX_MODELS", 3))
+
+
+class ModelError(ValueError):
+    pass
+
+
+class ModelRegistry:
+    def __init__(self, fetch: bool = True):
+        self.fetch = fetch
+        self._models: dict[str, Model] = {}
+        self._order: list[str] = []
+        self._jobs: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    def validate(self, key: str) -> str:
+        if key not in CATALOG.get("models", {}):
+            raise ModelError(f"unknown model {key!r}")
+        return key
+
+    def status(self, key: str) -> dict:
+        with self._lock:
+            if key in self._models:
+                return {"key": key, "state": "ready", "progress": 1.0}
+            job = self._jobs.get(key)
+            if job:
+                return dict(job)
+        return {"key": key, "state": "installed" if is_installed(key) else "remote", "progress": 0.0}
+
+    def get(self, key: str) -> Model:
+        with self._lock:
+            model = self._models.get(key)
+            if model is None:
+                raise ModelError(f"model {key} is not loaded yet")
+            self._order.remove(key)
+            self._order.append(key)
+            return model
+
+    def _remember(self, model: Model) -> None:
+        with self._lock:
+            self._models[model.key] = model
+            if model.key in self._order:
+                self._order.remove(model.key)
+            self._order.append(model.key)
+            # Sessions keep their own reference, so evicting only drops the
+            # cache entry; the default model is never evicted.
+            for old in [k for k in self._order if k != DEFAULT_MODEL]:
+                if len(self._order) <= MAX_MODELS:
+                    break
+                self._order.remove(old)
+                self._models.pop(old, None)
+
+    def load_now(self, key: str) -> Model:
+        self.validate(key)
+        with self._lock:
+            if key in self._models:
+                return self._models[key]
+        model = Model(key, fetch=self.fetch)
+        self._remember(model)
+        return model
+
+    def start(self, key: str) -> dict:
+        """Download (if needed) and load ``key`` in the background."""
+        self.validate(key)
+        with self._lock:
+            if key in self._models:
+                return {"key": key, "state": "ready", "progress": 1.0}
+            job = self._jobs.get(key)
+            if job and job["state"] in ("queued", "downloading", "loading"):
+                return dict(job)
+            job = {"key": key, "state": "queued", "progress": 0.0, "message": ""}
+            self._jobs[key] = job
+
+        def update(**kw):
+            with self._lock:
+                job.update(kw)
+
+        def run():
+            try:
+                if not is_installed(key):
+                    if not self.fetch:
+                        raise ModelError("model is not installed and downloads are disabled")
+                    update(state="downloading", message="downloading from the public model release")
+
+                    def progress(done, total):
+                        update(progress=(done / total) if total else 0.0,
+                               done_bytes=done, total_bytes=total)
+
+                    fetch_model(key, root=model_root(), progress=progress)
+                update(state="loading", progress=1.0, message="computing Ψ₀ from the empty row")
+                model = Model(key, fetch=False)
+                self._remember(model)
+                update(state="ready", progress=1.0, message="")
+            except Exception as exc:  # reported to the client
+                update(state="error", message=str(exc))
+
+        threading.Thread(target=run, daemon=True).start()
+        return dict(job)
+
+    def catalog(self) -> dict:
+        doc = dict(CATALOG)
+        models = {}
+        with self._lock:
+            loaded = set(self._models)
+        for key, info in CATALOG.get("models", {}).items():
+            m = dict(info)
+            m["installed"] = is_installed(key)
+            m["loaded"] = key in loaded
+            models[key] = m
+        doc["models"] = models
+        return doc
+
+
+# ---------------------------------------------------------------------------
 # Sessions
 # ---------------------------------------------------------------------------
 
@@ -359,6 +425,7 @@ class Session:
     state: object
     psi: list[dict]
     rng: np.random.Generator
+    model: "Model"
     lock: threading.Lock = field(default_factory=threading.Lock)
     observed: list[dict] = field(default_factory=list)
     history: list[dict] = field(default_factory=list)  # one entry per answer
@@ -392,9 +459,9 @@ def change_stats(tv: np.ndarray, learned: np.ndarray, clamped: set[int]) -> dict
 
 
 class Engine:
-    def __init__(self, model: Model):
-        self.model = model
-        self.learned = np.array([v.learned for v in model.variables])
+    def __init__(self, registry: ModelRegistry):
+        self.registry = registry
+        self.default = registry.load_now(DEFAULT_MODEL)
         self.sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
         self._spare = None
@@ -402,11 +469,11 @@ class Engine:
         self._spare_thread: threading.Thread | None = None
         self.refill_spare()
 
-    # -- warm spare default state: building a state loads all trees ---------
+    # -- warm spare state of the default model (building one loads all trees)
 
     def refill_spare(self) -> None:
         def build():
-            state = self.model.new_state(DEFAULT_DYNAMICS)
+            state = self.default.new_state(DEFAULT_DYNAMICS)
             with self._spare_lock:
                 if self._spare is None:
                     self._spare = state
@@ -418,13 +485,13 @@ class Engine:
             self._spare_thread = threading.Thread(target=build, daemon=True)
             self._spare_thread.start()
 
-    def _take_state(self, dynamics: str):
-        if dynamics != DEFAULT_DYNAMICS:
-            return self.model.new_state(dynamics)
+    def _take_state(self, model: Model, dynamics: str):
+        if dynamics != DEFAULT_DYNAMICS or model is not self.default:
+            return model.new_state(dynamics)
         with self._spare_lock:
             state, self._spare = self._spare, None
         if state is None:
-            state = self.model.new_state(dynamics)
+            state = model.new_state(dynamics)
         self.refill_spare()
         return state
 
@@ -443,15 +510,17 @@ class Engine:
             del self.sessions[oldest.id]
 
     def create(self, seed: int | None = None,
-               dynamics: str = DEFAULT_DYNAMICS) -> Session:
+               dynamics: str = DEFAULT_DYNAMICS,
+               model_key: str | None = None) -> Session:
         if dynamics not in DYNAMICS:
             raise AnswerError(f"unknown dynamics {dynamics!r}")
+        model = self.registry.get(model_key or DEFAULT_MODEL)
         if seed is None:
             seed = secrets.randbelow(2**31 - 1) + 1
         seed = int(seed) % (2**63)
         with self._lock:
             self._evict()
-        state = self._take_state(dynamics)
+        state = self._take_state(model, dynamics)
         session = Session(
             id=secrets.token_urlsafe(12),
             seed=seed,
@@ -459,6 +528,7 @@ class Engine:
             state=state,
             psi=snapshot(state),
             rng=np.random.default_rng(seed),
+            model=model,
         )
         with self._lock:
             self.sessions[session.id] = session
@@ -478,9 +548,10 @@ class Engine:
     def session_view(self, s: Session) -> dict:
         return {
             "session_id": s.id,
+            "model": s.model.key,
             "seed": s.seed,
             "dynamics": s.dynamics,
-            "psi": self.model.encode(s.psi),
+            "psi": s.model.encode(s.psi),
             "observed": s.observed,
             "history": [
                 {k: v for k, v in h.items() if k != "psi_raw"}
@@ -491,7 +562,7 @@ class Engine:
 
     def export(self, s: Session) -> dict:
         return {
-            "model": self.model.key,
+            "model": s.model.key,
             "dynamics": s.dynamics,
             "seed": s.seed,
             "observed": s.observed,
@@ -506,7 +577,7 @@ class Engine:
 
     def _draw(self, s: Session, col: int) -> tuple[str, float]:
         """sigma ~ p_i from the current state, with the session's seeded RNG."""
-        var = self.model.variables[col]
+        var = s.model.variables[col]
         q = s.psi[col]
         cats = [c for c in var.categories if q.get(c, 0.0) > 0.0] or list(q)
         probs = np.asarray([q.get(c, 0.0) for c in cats], dtype=float)
@@ -530,7 +601,7 @@ class Engine:
         Validation errors raise immediately (before any native call) so the
         HTTP layer can map them to a 4xx response.
         """
-        model = self.model
+        model = s.model
         if not (0 <= col < model.width):
             raise AnswerError("column out of range")
         if not model.variables[col].learned:
@@ -556,7 +627,7 @@ class Engine:
             "summary": summary,
             "tv": [round(float(x), 6) for x in tv],
             "changed": {
-                str(int(c)): self.model.encode_one(int(c), s.psi[int(c)])
+                str(int(c)): s.model.encode_one(int(c), s.psi[int(c)])
                 for c in changed
             },
         }
@@ -591,7 +662,7 @@ class Engine:
             yield {"type": "error",
                    "detail": "this session is still propagating the previous answer"}
             return
-        model = self.model
+        model = s.model
         try:
             s.touch()
             if any(o["column"] == col for o in s.observed):
@@ -673,7 +744,8 @@ class Engine:
             before_enc = model.encode(start)
             tv = np.array([0.5 * sum(abs(x - y) for x, y in zip(a, b))
                            for a, b in zip(after_enc, before_enc)])
-            stats = change_stats(tv, self.learned,
+            learned = np.array([v.learned for v in model.variables])
+            stats = change_stats(tv, learned,
                                  {o["column"] for o in s.observed})
             entry = {
                 "question": qnum,
