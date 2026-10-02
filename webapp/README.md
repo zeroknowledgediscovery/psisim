@@ -24,6 +24,32 @@ answered item.
 
 All mathematics runs in native code; the browser only renders snapshots.
 
+## Quickstart
+
+From the repository root:
+
+```bash
+bash scripts/run_webapp.sh                 # then open http://127.0.0.1:8000/
+```
+
+It installs the Python requirements, builds the native modules when they are
+missing or out of date, downloads GSS 2018 once, and starts the server
+(arguments such as `--port 9000` or `--host 0.0.0.0` are passed through).
+System requirements and the equivalent manual steps are in the
+[main README's Quickstart](../README.md#quickstart). By hand:
+
+```bash
+python3 -m pip install -r applications/psisimulation/requirements.txt -r webapp/requirements.txt
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target predict_distribution psisim_dynamics -j "$(nproc)"
+python3 applications/psisimulation/fetch_model.py gss/gss_2018
+python3 webapp/server.py --host 127.0.0.1 --port 8000
+```
+
+After pulling changes, rerun the script (or the `cmake --build` line) so the
+native modules are rebuilt when their sources changed. If a previous session
+reappears after an upgrade, click **New session**.
+
 ## Choosing a survey
 
 The survey bar under the header picks a model by **country** and **year**, the
@@ -98,27 +124,15 @@ $\Psi_0$ without any answer). The UI does not use either. At response scale
 pending perturbation grows ~1.3x per wave after about four waves); this is
 an open modelling question.
 
-## Run locally
+## Performance
 
-From the repository root:
-
-```bash
-python3 -m pip install -r applications/psisimulation/requirements.txt -r webapp/requirements.txt
-
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target predict_distribution psisim_dynamics -j "$(nproc)"
-
-python3 applications/psisimulation/fetch_model.py gss/gss_2018   # once
-python3 webapp/server.py --host 127.0.0.1 --port 8000
-```
-
-Open <http://127.0.0.1:8000/>. The first time a model is used, its $\Psi_0$
-and learned dependency graph are computed (about 1–10 s) and stored in a
-persistent cache; afterwards, across restarts and sessions, loading a model
-takes well under a second. Creating a session builds a resident native state
-(1–4 s, mostly reading the trees); one warm spare GSS 2018 state is kept
-ready so a new session starts immediately. The first use of another survey
-also downloads it (2–60 MB). An answer's native update takes 0.01–1 s.
+The first time a model is used, its $\Psi_0$ and learned dependency graph
+are computed (about 1–10 s) and stored in a persistent cache; afterwards,
+across restarts and sessions, loading a model takes well under a second.
+Creating a session builds a resident native state (1–4 s, mostly reading the
+trees); one warm spare GSS 2018 state is kept ready so a new session starts
+immediately. The first use of another survey also downloads it (2–60 MB). An
+answer's native update takes 0.01–1 s.
 
 ### Model cache
 
@@ -132,11 +146,12 @@ cached $\Psi_0$ is bit-identical to a freshly computed one. Deleting the
 directory is always safe. The command-line simulations
 (`applications/psisimulation/`) use the same cache for $\Psi_0$.
 
-Tests (need the bindings and the model):
+### Tests
 
 ```bash
-python3 tests/test_propagation_dynamics.py   # dynamics invariants, ~3 min
-cd webapp && python3 smoke_test.py           # engine end to end
+python3 tests/test_model_cache.py            # cache behaviour, seconds
+python3 tests/test_propagation_dynamics.py   # dynamics invariants, ~3 min (GSS 2018)
+cd webapp && python3 smoke_test.py           # engine end to end, incl. an on-demand download
 ```
 
 ## Deployment
@@ -192,7 +207,10 @@ changed.
 - `build_catalog.py` — regenerates `assets/catalog.json` (models, periods,
   countries) and `assets/metadata/` (item labels) from a DTAG checkout (see
   `assets/PROVENANCE.md`).
+- `smoke_test.py` — end-to-end check of the engine (GSS 2018 and an
+  on-demand Eurobarometer download).
 - `static/` — the single-page client (no build step, no external assets).
+- `../scripts/run_webapp.sh` — one-command install, build, fetch and start.
 - `../bindings/psisim_dynamics_py.cpp` — PsiSim-owned binding: the learned
   dependency graph and `PropagationPsiState`. It is not part of the vendored
   LSM runtime, so `scripts/sync_lsm_runtime.sh` never overwrites it.

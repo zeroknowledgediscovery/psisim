@@ -29,6 +29,100 @@ simpler mean-field constructions.
 
 ---
 
+## Quickstart
+
+### Requirements
+
+- Linux (tested on Ubuntu) or macOS (untested; needs `libomp` for OpenMP)
+- a C++17 compiler with OpenMP, CMake ≥ 3.18 (Ninja optional), Python ≥ 3.9
+  with development headers
+- network access to GitHub (the first build fetches pybind11 and
+  nlohmann/json) and to `storage.googleapis.com` (public model archives)
+
+On Ubuntu/Debian:
+
+```bash
+sudo apt-get install -y g++ cmake ninja-build python3-dev python3-pip
+```
+
+### Run the interactive webapp (one command)
+
+```bash
+git clone https://github.com/zeroknowledgediscovery/psisim
+cd psisim
+bash scripts/run_webapp.sh
+```
+
+then open <http://127.0.0.1:8000/>. The script installs the Python
+requirements, builds the native modules (a few minutes the first time; skipped
+when they are up to date), downloads the GSS 2018 model once (~1 MB), and
+starts the server. Options are passed through, e.g.
+`bash scripts/run_webapp.sh --port 9000` or `--host 0.0.0.0` to open it to
+other machines.
+
+<details>
+<summary>The same steps by hand</summary>
+
+```bash
+python3 -m pip install -r applications/psisimulation/requirements.txt -r webapp/requirements.txt
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target predict_distribution qdistance psisim_dynamics -j "$(nproc)"
+python3 applications/psisimulation/fetch_model.py gss/gss_2018
+python3 webapp/server.py --port 8000
+```
+
+</details>
+
+### Use it
+
+- **Choose a survey** in the bar under the header: a country and a year select
+  the matching public DTAG model (GSS by year for the United States,
+  Afrobarometer rounds, Eurobarometer waves, WVS7). **Load survey** downloads
+  it on first use and starts at its empty state $\Psi_0$.
+- **Ask a question**: click one in *Ask next*, search for one, or click any
+  sparkline. An answer is drawn from the question's current distribution and
+  that distribution collapses to a red bar.
+- **Watch $\Psi$ update**: every distribution the answer changed morphs and
+  glows in the grid of all marginals, the largest changes pop out as
+  before/after cards, and the *Current mind* donut shows how far each item now
+  is from $\Psi_0$. *Ask next* re-ranks the remaining questions.
+- **New session** restarts at $\Psi_0$ (optionally with a fixed random seed);
+  **Export** downloads a JSON record of the session.
+
+Details: [`webapp/README.md`](webapp/README.md).
+
+### Run the tests
+
+```bash
+python3 tests/test_model_cache.py              # seconds, no model needed
+python3 tests/test_propagation_dynamics.py     # ~3 min, GSS 2018 model
+cd webapp && python3 smoke_test.py             # webapp engine end to end
+```
+
+### Command-line simulations
+
+```bash
+bash applications/psisimulation/run_example.sh   # progressive GSS 2018 example, frames + GIF
+```
+
+This uses the finite-$n$ `mode` relaxation sweeps, an optional finite-sample /
+large-deviation experiment (sections 8 and 13); see
+[`applications/psisimulation/README.md`](applications/psisimulation/README.md).
+
+### Where things are
+
+| document | contents |
+| --- | --- |
+| this README, sections 1–28 | mathematical specification of the native dynamics |
+| [`webapp/README.md`](webapp/README.md) | webapp: features, survey selection, configuration, deployment, HTTP API |
+| [`webapp_instruction.md`](webapp_instruction.md) | design specification of the webapp and its default propagation dynamics |
+| [`applications/psisimulation/README.md`](applications/psisimulation/README.md) | command-line simulations, model retrieval, outputs |
+| [`applications/psisimulation/examples/README.md`](applications/psisimulation/examples/README.md) | worked mathematical example (GSS 2018, two answers) |
+| [`webapp/assets/PROVENANCE.md`](webapp/assets/PROVENANCE.md) | survey catalog and item labels (built from DTAG) |
+| [`LSM_PROVENANCE.md`](LSM_PROVENANCE.md) | vendored native runtime |
+
+---
+
 ## 1. Repository contents
 
 The standalone repository contains
@@ -56,15 +150,21 @@ bindings/
     psisim_dynamics_py.cpp     # PsiSim-owned; not synced from LSM
 
 tests/
-    test_propagation_dynamics.py
+    test_propagation_dynamics.py   # default dynamics invariants (real model)
+    test_model_cache.py            # persistent Psi0 / graph cache
 
 webapp/                        # interactive survey simulation (see webapp/README.md)
     server.py
     engine.py
     build_catalog.py
+    smoke_test.py
     static/
     assets/catalog.json        # public DTAG models by country and year
     assets/metadata/           # item labels per model
+
+scripts/
+    run_webapp.sh              # one-command install, build, fetch, start
+    sync_lsm_runtime.sh        # refresh the vendored LSM runtime
 
 include/
 src/
@@ -1406,16 +1506,17 @@ Requirements include a C++17 compiler, CMake, Python development headers,
 OpenMP, and Python packages listed in
 `applications/psisimulation/requirements.txt`.
 
-From the repository root:
+From the repository root (or simply `bash scripts/run_webapp.sh`, see the
+Quickstart):
 
 ```bash
 python3 -m pip install -r applications/psisimulation/requirements.txt
 
-cmake -S . -B build-tests -G Ninja \
+cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DLSM_BUILD_PYTHON_BINDINGS=ON
 
-cmake --build build-tests \
+cmake --build build \
   --target predict_distribution qdistance psisim_dynamics \
   -j "$(nproc)"
 ```
@@ -1431,9 +1532,19 @@ bin/psisim_dynamics*.so   # dependency graph + propagation-only dynamics (webapp
 and the PsiSim Python scripts automatically prepend `bin/` to their import
 path.
 
+$\Psi_0$ and each model's learned dependency graph are computed once per
+model and runtime build and kept in a persistent cache
+(`$PSISIM_CACHE_DIR`, default `~/.cache/psisim`), keyed by a fingerprint of
+the model files and the compiled modules; cached values are bit-identical to
+freshly computed ones.
+
 ---
 
 ## 22. Quick progressive example
+
+This example uses finite-$n$ `mode` relaxation sweeps after each answer, an
+optional finite-sample / LDP experiment (section 13); the webapp's default
+dynamics apply only the answer itself (section 13.3).
 
 The repository includes
 
@@ -1632,8 +1743,8 @@ application is intentionally not overwritten.
 
 Before a new model or runtime revision is used for analysis:
 
-1. build both native extensions;
-2. run the smoke test;
+1. build the native extensions;
+2. run the smoke tests and `tests/test_propagation_dynamics.py`;
 3. verify that a `zero_action` sweep leaves $\Psi$ unchanged;
 4. verify that a hard observation collapses its source marginal to a point
    mass;
