@@ -8,16 +8,15 @@ The purpose of the app is to make the central idea visually understandable:
 the LSM represents a cross-linked system of conditional opinions. The state is
 not one answer per survey item, but a probability distribution over every
 modeled item. When one item is assigned a concrete value, that intervention
-changes other distributions through the learned LSM dependency structure. The
-system then relaxes under the PsiSim dynamics. A second item is queried in the
-**new** state, so the sequence of observations creates a history-dependent,
-reflexive trajectory.
+changes other distributions through the learned LSM dependency structure. A
+second item is queried in the **new** state, so the sequence of observations
+creates a history-dependent, reflexive trajectory.
 
-The intended visual metaphor is **dropping a stone into water**. A local
-answer creates an immediate splash and then successive ripples across the
-modeled opinion system. The animation is a presentation of native simulation
-snapshots; screen distance must not be interpreted as a physical propagation
-time.
+The visual goal is to make it obvious that **asking one question updates the
+marginal distributions of many other questions**: the answered item becomes
+a point mass, and the largest resulting updates elsewhere are shown one by
+one (section 9). The animation is a presentation of native simulation
+snapshots.
 
 ---
 
@@ -239,9 +238,15 @@ The result is identical to the vendored
 `CenteredLdpPsiState.hard_observe(..., response_scale=1.0, clamp=True)`.
 Afterward `state.to_python()` is the first post-intervention animation frame.
 
-### Propagation waves (default relaxation)
+### One update per question (webapp default)
 
-Then run waves:
+The webapp shows exactly one update of $\Psi$ per question: the hard
+observation above. It runs no further waves and no relaxation, so what the
+viewer sees is the direct effect of the answer.
+
+### Propagation waves (optional, API only)
+
+Further waves can be requested through the API (`max_steps > 0`):
 
 ```python
 summary = state.wave(threads=threads)
@@ -249,8 +254,7 @@ summary = state.wave(threads=threads)
 
 Each wave propagates **only** the deltas newly induced by the previous wave
 (section 8). With nothing pending a wave is the identity, bit for bit. Take a
-snapshot after every wave. The webapp runs up to five waves per answer by
-default.
+snapshot after every wave. The webapp UI does not use waves.
 
 The default webapp does **not** run `state.sweep(event="mode", n=10)` (or any
 other sweep) after initialization or as passive relaxation. Finite-$n$ sweeps
@@ -367,8 +371,8 @@ The UI can briefly animate the categorical probabilities before settling on
 the sampled answer. Use a seeded session RNG so the demonstration can be
 reproduced; show the uniform draw and the seed.
 
-Inspecting a topic (clicking its node) does not answer it; the topic card
-offers a single "Ask this topic" action that uses the same draw.
+A question can be chosen from the search list or by clicking its sparkline in
+the $\Psi$ grid (section 9); hovering a sparkline only shows its distribution.
 
 ---
 
@@ -430,10 +434,11 @@ rest of the system but cannot overwrite the supplied answer.
 
 ---
 
-## 8. Propagation waves: the later ripples
+## 8. Propagation waves (optional)
 
-After the hard observation, propagate only the perturbation created by that
-observation, wave by wave.
+The webapp UI applies only the hard observation (wave 0) per question. If
+further propagation is requested (API `max_steps > 0`), propagate only the
+perturbation created by that observation, wave by wave.
 
 Initial perturbation:
 
@@ -491,7 +496,7 @@ frame 3    after wave 2
 ...
 ```
 
-The webapp runs up to five waves per answer (configurable). If deltas remain
+When waves are requested (API `max_steps > 0`; the UI uses none). If deltas remain
 pending after the last wave, they are dropped and the remaining perturbation
 (sum of TV norms) is reported, so one answer's waves never leak into the next
 answer's.
@@ -515,17 +520,23 @@ a separate decision and is deliberately not applied yet.
 
 ---
 
-## 9. Visualizing that the whole state changes
+## 9. Visualizing that asking a question changes $\Psi$
 
-The key message is that an answer to one topic changes $\Psi$ throughout,
-not only the answered coordinate. The webapp shows this with:
+The key message is that answering one question changes the distributions of
+many other questions, not only the answered one. A node-and-edge graph of
+~1,000 items is not interpretable, so the webapp shows $\Psi$ directly:
 
-- a live counter: how many other topics the current answer has moved, how
-  many by more than 0.01, and the mean shift (TV);
-- the field coloured by each item's change caused by this answer (log scale,
-  so small widespread shifts are visible), switchable to change since
-  $\Psi_0$; items first reached in the current wave are outlined;
-- a $\Psi$ change map: one row per answer, one column per modelled item, plus
-  a row for the total change since $\Psi_0$;
-- for any inspected topic, its distribution after every answer, showing how
-  topics that were never asked shift.
+- **Question panel.** The asked question's current distribution is drawn as
+  a histogram. After the (animated) draw, it collapses to the point mass: the
+  drawn answer becomes a red bar at 1 and the other answers drop to 0 with a
+  grey outline of their previous value. A summary states how many of the
+  other distributions changed, how many by more than 0.01 (TV), and lists the
+  largest updates.
+- **$\Psi$ grid.** Every $p_i$ is a small sparkline histogram (fixed answer
+  order and scale per item), all ~1,000 on one screen in GSS column order so
+  related items sit together. Blue = current distribution; red = answered.
+- **Update sequence.** After each question, every changed sparkline pulses
+  and keeps a gold outline. Then only the largest updates (up to 8, TV at
+  least 0.002) grow, one at a time, into a readable card showing before (grey
+  outline) and after (blue) for their main answers, and shrink back into
+  their sparkline. The sequence can be replayed.

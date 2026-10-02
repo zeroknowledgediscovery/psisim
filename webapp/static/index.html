@@ -4,22 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PsiSim · GSS 2018</title>
-<meta name="description" content="Interactive PsiSim simulation of the GSS 2018 Large Science Model: a reflexive model of linked opinions.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='3' fill='%23a5ecff'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%234cc9f0' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='16' r='13.5' fill='none' stroke='%234cc9f0' stroke-opacity='.5' stroke-width='1.4'/%3E%3C/svg%3E">
+<meta name="description" content="Asking one survey question updates the whole state Ψ of the GSS 2018 Large Science Model.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='14' width='5' height='14' rx='1' fill='%233987e5'/%3E%3Crect x='13.5' y='4' width='5' height='24' rx='1' fill='%23e66767'/%3E%3Crect x='23' y='18' width='5' height='10' rx='1' fill='%233987e5'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <span class="logo" aria-hidden="true"></span>
-    <div>
-      <h1>PsiSim <span class="thin">· GSS 2018 Large Science Model</span></h1>
-      <p class="tagline">A reflexive model of linked opinions: each answer reshapes the state the next question is asked in.</p>
-    </div>
+    <h1>PsiSim <span class="thin">· GSS 2018 Large Science Model</span></h1>
+    <p class="tagline">Asking one question updates the response distributions of the whole survey.</p>
   </div>
   <div class="top-actions">
-    <span class="chip" id="session-chip" title="Session seed and dynamics">seed —</span>
-    <button class="btn ghost" id="btn-about" aria-expanded="false" aria-controls="about">About the model</button>
+    <span class="chip" id="session-chip" title="Random seed used to draw answers">seed —</span>
+    <button class="btn ghost" id="btn-about" aria-expanded="false" aria-controls="about">How it works</button>
     <button class="btn ghost" id="btn-export">Export</button>
     <button class="btn" id="btn-new">New session</button>
   </div>
@@ -28,126 +25,64 @@
 <section id="about" class="about" hidden>
   <div class="about-grid">
     <div>
-      <h3>What you are looking at</h3>
-      <p>The state is not one answer per survey item, but a probability distribution over the possible answers of every modelled GSS item:
-        <span class="math">Ψ = (p<sub>1</sub>, …, p<sub>d</sub>)</span>. It starts at the empty state
-        <span class="math">Ψ<sub>0</sub></span>, the distributions implied by the trained model when no answers have been supplied. Each dot is one item.</p>
-      <p>Faint lines are the learned dependencies of the native LSM: item <i>i</i> is linked to item <i>j</i> when the tree that predicts <i>j</i> uses <i>i</i>.</p>
+      <h3>What Ψ is</h3>
+      <p>Ψ = (p<sub>1</sub>, …, p<sub>d</sub>) holds one response distribution for every modelled GSS item. Each small sparkline below is one p<sub>i</sub>: a histogram over that item's possible answers. Before any answer, Ψ = Ψ<sub>0</sub>, the distributions the trained model implies for an empty survey, and it does not move on its own.</p>
     </div>
     <div>
-      <h3>What an answer does</h3>
-      <p>Picking a topic <i>i</i> draws an answer <span class="math">σ ~ p<sub>i</sub></span> from its <b>current</b> distribution and clamps it.
-        Wave 0 (the <b>splash</b>) propagates <span class="math">Δ<sub>i</sub> = δ<sub>σ</sub> − p<sub>i</sub></span> through the centred kernels
-        <span class="math">K<sub>j←i</sub>(·|s) = φ<sub>j</sub>(x<sub>∅</sub>, X<sub>i</sub>=s)</span> to every dependent item.
-        Each later wave (the <b>ripples</b>) propagates only the change it newly induced, <span class="math">Δ<sub>j</sub> = p<sub>j</sub><sup>after</sup> − p<sub>j</sub><sup>before</sup></span>, to the items that depend on <i>j</i>.</p>
-      <p><b>No answer ⇒ no motion:</b> Ψ<sub>0</sub> is exactly stationary. Everything that moves was moved by an answer.</p>
+      <h3>What asking does</h3>
+      <p>Asking item <i>i</i> draws an answer σ ~ p<sub>i</sub> from its current distribution (seeded, reproducible). p<sub>i</sub> becomes the point mass δ<sub>σ</sub> (red) and the change δ<sub>σ</sub> − p<sub>i</sub> is passed through the learned LSM links to every item whose model uses <i>i</i>, updating their distributions once. The next question is asked in this updated Ψ.</p>
     </div>
     <div>
       <h3>How not to read it</h3>
       <ul>
-        <li>Links are learned statistical dependencies between survey responses. They are <b>not causal</b> links.</li>
-        <li>This is a model of survey-response dependencies, <b>not a picture of a brain</b>.</li>
-        <li>Waves are undamped at response scale 1 and need not die out on their own; each answer's wave train is stopped after the configured number of waves and the remaining perturbation is reported.</li>
-        <li>Positions are a layout for readability. Screen distance and ripple timing do <b>not</b> represent physical propagation time — each wave is one discrete simulation snapshot.</li>
+        <li>Links are learned statistical dependencies between survey responses, not causal effects.</li>
+        <li>One question = one update of Ψ (the native hard observation). No further relaxation is run.</li>
+        <li>All mathematics runs in the native PsiSim runtime; the page only draws its snapshots.</li>
       </ul>
     </div>
   </div>
 </section>
 
 <main class="layout">
-  <aside class="panel left" aria-label="Choose a topic">
-    <p class="ask-hint">Choose a topic to ask it. An answer is drawn immediately from its current distribution and spreads through the model.</p>
+  <aside class="panel" aria-label="Choose a question">
+    <p class="ask-hint">Choose a question. An answer is drawn from its current distribution, and Ψ updates.</p>
     <label class="search">
       <span class="visually-hidden">Search GSS items</span>
       <input id="search" type="search" autocomplete="off" spellcheck="false"
              placeholder="Search variable, question or answer…">
     </label>
-    <div class="list-head" id="results-head">Suggested topics</div>
+    <div class="list-head" id="results-head">Suggested questions</div>
     <ul class="results" id="results"></ul>
-
-    <div class="list-head">Answers so far <span class="count" id="answer-count">0</span></div>
-    <ol class="history" id="history"><li class="empty">No answers yet.</li></ol>
+    <div class="list-head">Asked so far <span class="count" id="answer-count">0</span></div>
+    <ol class="history" id="history"><li class="empty">Nothing asked yet.</li></ol>
   </aside>
 
-  <section class="stage" aria-label="Opinion field">
-    <div class="field-wrap" id="field-wrap">
-      <canvas id="field"></canvas>
-      <div class="headline" id="headline" aria-live="polite"></div>
-      <div class="legend">
-        <div class="ramp-ticks"><span>no change</span><span>10⁻⁴</span><span>10⁻³</span><span>10⁻²</span><span>10⁻¹+</span></div>
-        <div class="ramp"><i></i></div>
-        <div class="legend-row"><b class="dot observed"></b>answered (clamped)
-          <b class="dot halo"></b>changed in this wave
-          <b class="dot front"></b>first reached in this wave</div>
-        <div class="legend-note">Colour = total-variation distance of each item's distribution. Layout is for readability only; screen distance is not propagation time.</div>
+  <section class="main" aria-label="Question and state">
+    <div class="question" id="question"></div>
+
+    <div class="grid-head">
+      <div>
+        <h2 id="grid-title">Ψ: all marginal distributions</h2>
+        <p class="grid-sub" id="grid-sub"></p>
       </div>
-      <div class="zoom-ctl">
-        <button class="btn icon" id="zoom-in" aria-label="Zoom in">+</button>
-        <button class="btn icon" id="zoom-out" aria-label="Zoom out">−</button>
-        <button class="btn icon" id="zoom-reset" aria-label="Reset view">⟲</button>
+      <div class="grid-legend" aria-hidden="true">
+        <span><i class="lg-cur"></i>current p<sub>i</sub></span>
+        <span><i class="lg-before"></i>before this answer</span>
+        <span><i class="lg-ans"></i>answered (point mass)</span>
+        <button class="btn ghost small" id="btn-replay" disabled>Replay updates</button>
       </div>
+    </div>
+    <div class="grid-wrap" id="grid-wrap">
+      <canvas id="grid" aria-label="Sparkline of every item's response distribution"></canvas>
+      <div class="spot-layer" id="spot-layer"></div>
       <div class="tooltip" id="tooltip" hidden></div>
       <div class="loading" id="loading">
         <div class="spinner"></div>
         <p id="loading-text">Loading the GSS 2018 model…</p>
       </div>
     </div>
-
-    <div class="below">
-      <div class="timeline">
-        <div class="tl-head">
-          <div class="tl-title" id="tl-title">Waves appear here after the first answer.</div>
-          <div class="tl-actions">
-            <span class="tl-status" id="tl-status"></span>
-            <div class="color-mode" role="group" aria-label="Colour the field by">
-              <span>Colour</span>
-              <button data-color="answer" aria-pressed="true">change from this answer</button>
-              <button data-color="psi0" aria-pressed="false">since Ψ₀</button>
-            </div>
-            <button class="btn ghost small" id="btn-replay" disabled>Replay</button>
-          </div>
-        </div>
-        <div class="frames" id="frames"></div>
-      </div>
-
-      <div class="mapbox">
-        <div class="map-head">
-          <span class="sec-title">Ψ change map</span>
-          <span class="muted" id="map-note">One row per answer, one column per modelled item. Brightness = how far the answer moved that item.</span>
-        </div>
-        <div class="map-wrap" id="map-wrap">
-          <canvas id="changemap" aria-label="Change of every item caused by each answer"></canvas>
-          <div class="map-empty" id="map-empty">Rows appear as you answer topics.</div>
-        </div>
-      </div>
-
-      <div class="movers-box">
-        <div class="sec-title">Largest shifts <span class="muted" id="movers-note"></span></div>
-        <ol class="movers" id="movers"></ol>
-      </div>
-    </div>
   </section>
-
-  <aside class="panel right" aria-label="Topic card">
-    <div id="card"></div>
-  </aside>
 </main>
-
-<dialog id="new-dialog" aria-labelledby="new-title">
-  <form method="dialog" id="new-form">
-    <h2 id="new-title">New session from Ψ₀</h2>
-    <label class="field-label" for="new-seed">Random seed for drawing answers</label>
-    <input id="new-seed" inputmode="numeric" placeholder="blank = random">
-    <fieldset>
-      <legend>Dynamics after an answer</legend>
-      <div id="dyn-options"></div>
-    </fieldset>
-    <div class="dialog-actions">
-      <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
-      <button class="btn" value="ok" id="new-ok">Start</button>
-    </div>
-  </form>
-</dialog>
 
 <script src="/static/app.js"></script>
 </body>

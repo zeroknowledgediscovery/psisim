@@ -79,7 +79,8 @@ DYNAMICS = {
     },
 }
 DEFAULT_DYNAMICS = "propagation"
-DEFAULT_MAX_STEPS = 5      # waves (propagation) or sweeps (finite-n)
+DEFAULT_MAX_STEPS = 0      # one update per question (hard observation only);
+                           # >0 adds propagation waves / finite-n sweeps (API only)
 MAX_STEPS_LIMIT = 20
 DEFAULT_EMPIRICAL_N = 10   # finite-n dynamics only
 RESPONSE_SCALE = 1.0

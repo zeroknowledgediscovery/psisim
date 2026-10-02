@@ -3,71 +3,56 @@
 An interactive view of the **GSS 2018 Large Science Model** as a reflexive
 model of linked opinions, implementing [`webapp_instruction.md`](../webapp_instruction.md).
 
-The state is the full distributional row
-$\Psi=(p_1,\ldots,p_d)$, one categorical response distribution per modelled
-GSS item. It starts at the empty state $\Psi_0$ and, under the default
-dynamics, **does not move until a topic is answered**. Choosing a topic asks
-it immediately: an answer $\sigma\sim p_i$ is drawn from its current
-distribution and dropped into the system like a stone into water.
+The state is $\Psi=(p_1,\ldots,p_d)$: one response distribution per modelled
+GSS item (1,034 for GSS 2018). The app shows one thing: **asking a question
+changes $\Psi$**, not only the answered item.
 
-| frame | what is shown | native call |
-| --- | --- | --- |
-| 0 | state immediately before the answer | — |
-| 1 | wave 0, the **splash**: $\Delta_i=\delta_\sigma-p_i$ propagated to the topics that depend on $i$ | `PropagationPsiState.hard_observe(i, sigma, clamp=True)` |
-| 2.. | waves 1.., the **ripples**: each wave propagates only the change it newly induced | `PropagationPsiState.wave()` |
-
-Each wave uses the centered hard-response kernels of the vendored runtime,
-$K_{j\leftarrow i}(\cdot\mid s)=\phi_j(x_\varnothing, X_i=s)$, at response
-scale 1 with simplex projection; clamped topics are never modified. A wave
-with nothing pending is the identity, so $\Psi_0$ is exactly stationary. See
-section 8 of the instructions and `tests/test_propagation_dynamics.py`.
-
-Up to five waves run per answer (configurable up to 20). If change is still
-pending after the last wave it is dropped and its size is reported, so one
-answer's waves never leak into the next answer's.
-
-The finite-$n$ sweeps of the vendored `CenteredLdpPsiState`
-(`event="mode"` / `"sample"`) are still available as an **optional session
-type** (New session → dynamics), labelled as a finite-sample / LDP
-experiment. They inject a new perturbation at every variable on every sweep
-and move $\Psi_0$ without any answer, so they are never the default.
+- It starts at the empty state $\Psi_0$, which does not move until a
+  question is asked.
+- Choosing a question draws an answer $\sigma\sim p_i$ from its current
+  distribution (seeded, reproducible) and applies **one** native update,
+  `PropagationPsiState.hard_observe(i, sigma, clamp=True)`: $p_i$ becomes the
+  point mass $\delta_\sigma$ and the change $\delta_\sigma-p_i$ is passed once
+  through the centered kernels
+  $K_{j\leftarrow i}(\cdot\mid s)=\phi_j(x_\varnothing, X_i=s)$ to every item
+  whose tree uses $i$. No further relaxation is run.
+- The next question is asked in this updated $\Psi$.
 
 All mathematics runs in native code; the browser only renders snapshots.
 
 ## What the screen shows
 
-- **Live counter** — how many other topics the current answer has moved, how
-  many by more than 0.01, and the mean shift (TV), updated wave by wave.
-- **Field** — one dot per model column, laid out from the learned dependency
-  graph (an edge $i\to j$ exists when the native tree for $j$ splits on $i$).
-  Colour is each topic's change caused by the current answer (log scale, so
-  small widespread shifts are visible); a toggle switches to change since
-  $\Psi_0$. Amber dots are answered and clamped. During playback a halo marks
-  each topic's change in that wave, links light up from the topics that
-  changed in the previous wave, and topics reached for the first time are
-  outlined. The layout is for readability only: screen distance is not a
-  propagation time.
-- **Wave strip** — Before / Splash / Wave k, with how many topics have been
-  reached so far and how many were newly reached; replay.
-- **Ψ change map** — one row per answer, one column per modelled topic (same
-  order in every row), brightness = how far that answer moved the topic, plus
-  a row for the total change since $\Psi_0$. Click a cell to inspect.
-- **Largest shifts** — the topics this answer moved most, with the change in
-  their most likely response.
-- **Topic card** — question text, current distribution with the $\Psi_0$
-  value as a tick, and a stacked bar of the topic's distribution after every
-  answer, so topics that were never asked visibly drift.
-- **Export** — JSON with the dynamics, seed, answers (with the uniform draw
-  `u`), per-answer movement statistics and every native step summary.
+- **Question panel** — the asked question and its current distribution as a
+  histogram. The draw is animated, then the histogram collapses: the drawn
+  answer becomes a red bar at 1, the other answers drop to 0 and keep a grey
+  outline of where they were. Next to it: how many of the other distributions
+  this answer changed, how many by more than 0.01 (total variation), and the
+  largest updates with the change in their most likely answer.
+- **Ψ grid** — every $p_i$ as a small sparkline (a histogram with a fixed
+  answer order and scale per item), in GSS column order so related items sit
+  together, sized to fit one screen. Blue = current distribution, red =
+  answered (all mass on the drawn answer). Hover to read one; click to ask it.
+- **The update sequence** — after each answer, every changed sparkline
+  pulses and keeps a gold outline. Then the largest updates (up to 8, TV ≥
+  0.002) pop out of the grid one at a time: each grows into a readable card
+  showing before (grey outline) and after (blue) for its main answers, then
+  shrinks back into its sparkline. "Replay updates" repeats the sequence.
+- **Asked so far** — every answer with how many distributions it changed.
+- **Export** — JSON with the seed, answers (with the uniform draw `u`),
+  per-answer change statistics and the native step summaries.
 
-### Known behaviour of the undamped waves
+### Further dynamics (API only)
 
-At response scale 1 without damping, the waves do not die out on GSS 2018:
-the pending perturbation shrinks for about four waves and then grows
-(~1.3x per wave) until simplex projection saturates it. Unasked topics can be
-pushed to point masses (e.g. after `abany = yes`, `absingle` goes from 0.56
-to 1.00). The UI reports the dropped remainder after each answer. Damping /
-response scale is an open modelling decision.
+`POST /api/session/{id}/answer` accepts `max_steps > 0` to add propagation
+waves after the hard observation (each wave passes on only the change induced
+by the previous wave; see section 8 of the instructions and
+`tests/test_propagation_dynamics.py`), and a session can be created with
+`dynamics: "mode" | "sample"` for the optional finite-$n$ sweeps of the
+vendored `CenteredLdpPsiState` (a finite-sample / LDP experiment that moves
+$\Psi_0$ without any answer). The UI does not use either. At response scale
+1 without damping, the propagation waves do not die out on GSS 2018 (the
+pending perturbation grows ~1.3x per wave after about four waves); this is
+an open modelling question.
 
 ## Run locally
 
@@ -84,10 +69,9 @@ python3 webapp/server.py --host 127.0.0.1 --port 8000
 ```
 
 Open <http://127.0.0.1:8000/>. Startup takes ~5–25 s (the first start also
-computes and caches the graph layout). Creating a session builds a resident
-native state (~3–5 s); one warm spare default state is kept ready so the next
-session starts immediately. A wave takes 0.01–2 s on 4 cores (the first waves
-of a session warm the kernel cache); frames stream as they finish.
+computes and caches a graph layout used by the API). Creating a session
+builds a resident native state (~3–5 s); one warm spare is kept ready so the
+next session starts immediately. An answer's native update takes ~10 ms.
 
 Tests (need the bindings and the model):
 
@@ -126,7 +110,7 @@ without it.
 | `GET` | `/api/model` | variables (column, name, label, categories, degrees), edges, layout, $\Psi_0$ |
 | `POST` | `/api/session` | `{seed?, dynamics?: propagation\|mode\|sample}` → `{session_id, seed, dynamics, psi, observed, history}` |
 | `GET` | `/api/session/{id}` | current `psi`, answers and per-answer change history |
-| `POST` | `/api/session/{id}/answer` | `{column, max_steps?, empirical_n?}` → draws $\sigma\sim p_i$ and streams NDJSON `answer`, `frame`, `progress`, `done` events |
+| `POST` | `/api/session/{id}/answer` | `{column, max_steps? (default 0), empirical_n?}` → draws $\sigma\sim p_i$ and streams NDJSON `answer`, `frame`, `progress`, `done` events |
 | `GET` | `/api/session/{id}/export` | reproducibility record |
 | `DELETE` | `/api/session/{id}` | drop the resident state |
 
@@ -138,8 +122,8 @@ changed.
 ## Files
 
 - `server.py` — FastAPI app and NDJSON streaming.
-- `engine.py` — model loading, dependency graph, layout, resident sessions,
-  propagation waves (default) and optional finite-n sweeps.
+- `engine.py` — model loading, metadata, resident sessions, the one-update
+  answer path, and the optional waves / finite-n sweeps.
 - `build_gss_metadata.py` — regenerates `assets/gss/gss_2018_map.csv`
   (see `assets/gss/PROVENANCE.md`).
 - `static/` — the single-page client (no build step, no external assets).

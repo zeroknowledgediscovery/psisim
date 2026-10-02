@@ -40,6 +40,12 @@ def main() -> None:
     assert done["stats"]["moved"] > 100, done["stats"]
     assert s.state.pending_count == 0, "an answer's wave train must not leak"
 
+    # The webapp default: one update per question (hard observation only).
+    s3 = engine.create(seed=7)
+    one = list(engine.answer(s3, col))
+    assert [e["phase"] for e in one if e["type"] == "frame"] == ["hard_observation"]
+    assert one[-1]["stats"]["moved"] > 0, one[-1]["stats"]
+
     # Same seed => same sampled answer (reproducible demonstration).
     s2 = engine.create(seed=12345)
     again = next(iter(engine.answer(s2, col, max_steps=0)))
