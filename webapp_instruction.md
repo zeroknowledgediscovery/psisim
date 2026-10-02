@@ -534,9 +534,17 @@ many other questions, not only the answered one. A node-and-edge graph of
   largest updates.
 - **$\Psi$ grid.** Every $p_i$ is a small sparkline histogram (fixed answer
   order and scale per item), all ~1,000 on one screen in GSS column order so
-  related items sit together. Blue = current distribution; red = answered.
-- **Update sequence.** After each question, every changed sparkline pulses
-  and keeps a gold outline. Then only the largest updates (up to 8, TV at
-  least 0.002) grow, one at a time, into a readable card showing before (grey
-  outline) and after (blue) for their main answers, and shrink back into
-  their sparkline. The sequence can be replayed.
+  related items sit together. Colour encodes the distance of $p_i$ from
+  $\Psi_0$ (one sequential hue, log scale); red = answered.
+- **Update sequence.** After each question, the changed sparklines morph from
+  their old to their new shape in a fast cascade, largest change first, and
+  keep a gold outline. Then only the largest updates (up to 6, TV at least
+  0.002) grow, one after another, into a card whose bars slide from before
+  (grey outline) to after, and shrink back into their sparkline. The
+  sequence can be replayed.
+- **Current mind.** A donut with one spoke per question (survey order) whose
+  length and colour show its distance from $\Psi_0$; answered questions are
+  red. It summarises the whole state at a glance, with the answers so far.
+- **Ask next.** Instead of a history list, the side panel offers clickable
+  unasked questions ranked by how far the answers so far have moved them
+  from $\Psi_0$.

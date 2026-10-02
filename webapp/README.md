@@ -30,14 +30,25 @@ All mathematics runs in native code; the browser only renders snapshots.
   largest updates with the change in their most likely answer.
 - **Ψ grid** — every $p_i$ as a small sparkline (a histogram with a fixed
   answer order and scale per item), in GSS column order so related items sit
-  together, sized to fit one screen. Blue = current distribution, red =
-  answered (all mass on the drawn answer). Hover to read one; click to ask it.
-- **The update sequence** — after each answer, every changed sparkline
-  pulses and keeps a gold outline. Then the largest updates (up to 8, TV ≥
-  0.002) pop out of the grid one at a time: each grows into a readable card
-  showing before (grey outline) and after (blue) for its main answers, then
-  shrinks back into its sparkline. "Replay updates" repeats the sequence.
-- **Asked so far** — every answer with how many distributions it changed.
+  together, sized to fit one screen. Colour encodes how far each
+  distribution now is from $\Psi_0$ (one blue lightness ramp, log scale:
+  dim = unchanged, bright = moved); red = answered. Hover to read one; click
+  to ask it.
+- **The update sequence** — after each answer, the changed sparklines morph
+  from their old to their new shape in a fast cascade (largest change first)
+  with a glow, recolouring as they move, and keep a gold outline. Then the
+  largest updates (up to 6, TV ≥ 0.002) pop out one after another as
+  overlapping before/after cards whose bars slide from the old to the new
+  values. "Replay updates" repeats it.
+- **Current mind** — a donut with one spoke per question in survey order:
+  spoke length and colour = distance of that distribution from $\Psi_0$;
+  answered questions are red. The centre counts how many views have shifted
+  by more than 0.001, and the answers given so far are listed below it.
+  Hover a spoke to identify it; click to ask it.
+- **Ask next** — clickable unasked questions, ranked by how far the answers
+  so far have moved their distributions from $\Psi_0$ (suggested starters
+  before the first answer), each with a coloured mini histogram. The search
+  box finds any other question.
 - **Export** — JSON with the seed, answers (with the uniform draw `u`),
   per-answer change statistics and the native step summaries.
 

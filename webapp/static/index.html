@@ -51,14 +51,24 @@
       <input id="search" type="search" autocomplete="off" spellcheck="false"
              placeholder="Search variable, question or answer…">
     </label>
-    <div class="list-head" id="results-head">Suggested questions</div>
+    <div class="list-head" id="results-head">Ask next</div>
+    <p class="list-note" id="results-note"></p>
     <ul class="results" id="results"></ul>
-    <div class="list-head">Asked so far <span class="count" id="answer-count">0</span></div>
-    <ol class="history" id="history"><li class="empty">Nothing asked yet.</li></ol>
   </aside>
 
   <section class="main" aria-label="Question and state">
-    <div class="question" id="question"></div>
+    <div class="top-row">
+      <div class="question" id="question"></div>
+      <div class="mind-card" aria-label="Current mind: how far every distribution is from the empty state">
+        <div class="q-kicker">Current mind</div>
+        <div class="mind-wrap">
+          <canvas id="mind" width="184" height="184"></canvas>
+          <div class="mind-center" id="mind-center"></div>
+        </div>
+        <div class="mind-note">One spoke per question, in survey order. Longer and brighter = further from Ψ₀; red = answered.</div>
+        <ol class="asked" id="asked"></ol>
+      </div>
+    </div>
 
     <div class="grid-head">
       <div>
@@ -66,9 +76,9 @@
         <p class="grid-sub" id="grid-sub"></p>
       </div>
       <div class="grid-legend" aria-hidden="true">
-        <span><i class="lg-cur"></i>current p<sub>i</sub></span>
+        <span class="ramp-legend">change from Ψ₀ <i class="ramp"></i><span class="ticks"><span>none</span><span>0.001</span><span>0.01</span><span>0.1+</span></span></span>
         <span><i class="lg-before"></i>before this answer</span>
-        <span><i class="lg-ans"></i>answered (point mass)</span>
+        <span><i class="lg-ans"></i>answered</span>
         <button class="btn ghost small" id="btn-replay" disabled>Replay updates</button>
       </div>
     </div>
