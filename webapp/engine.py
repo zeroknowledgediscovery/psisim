@@ -41,7 +41,9 @@ from fetch_model import fetch_model  # noqa: E402
 from common import (  # noqa: E402
     BIN,
     load_binding,
-    psi0,
+    cached_json,
+    model_fingerprint,
+    psi0_cached,
     resolve_model,
     snapshot,
     tree_ids,
@@ -186,14 +188,26 @@ class Model:
 
         self.variables = self._load_metadata()
 
-        # Psi0 = (phi_i(x_empty))_i, computed natively once and shared.
-        self.psi0 = psi0(self.path)
+        # Psi0 = (phi_i(x_empty))_i: computed natively once per model and
+        # kept in a persistent on-disk cache (bit-identical on reuse).
+        t1 = time.perf_counter()
+        fingerprint = model_fingerprint(self.path)
+        self.psi0, self.psi0_from_cache = psi0_cached(self.path, fingerprint=fingerprint)
+        self.psi0_seconds = time.perf_counter() - t1
         if len(self.psi0) != self.width:
             raise RuntimeError("Psi0 width does not match model width")
         self._align_categories(self.psi0)
 
         self.dynamics = load_dynamics_binding()
-        used = self.dynamics.used_columns(str(self.trees_dir), self.tree_ids)
+        # The learned dependency graph (which columns each tree splits on)
+        # needs every tree deserialised; it is cached like Psi0.
+        used_raw, _ = cached_json(
+            self.path, "deps",
+            lambda: {str(k): v for k, v in self.dynamics.used_columns(
+                str(self.trees_dir), self.tree_ids).items()},
+            fingerprint=fingerprint,
+        )
+        used = {int(k): v for k, v in used_raw.items()}
         learned = set(self.tree_ids)
         self.targets = [[] for _ in range(self.width)]
         self.sources = [[] for _ in range(self.width)]
@@ -384,7 +398,7 @@ class ModelRegistry:
                                done_bytes=done, total_bytes=total)
 
                     fetch_model(key, root=model_root(), progress=progress)
-                update(state="loading", progress=1.0, message="computing Ψ₀ from the empty row")
+                update(state="loading", progress=1.0, message="loading Ψ₀ (cached after the first time)")
                 model = Model(key, fetch=False)
                 self._remember(model)
                 update(state="ready", progress=1.0, message="")

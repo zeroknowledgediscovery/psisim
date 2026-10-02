@@ -44,6 +44,9 @@ jobs:
       - name: Check webapp client syntax
         run: node --check webapp/static/app.js
 
+      - name: Model cache unit test
+        run: python3 tests/test_model_cache.py
+
       - name: Fetch GSS 2018 model
         run: python3 applications/psisimulation/fetch_model.py gss/gss_2018
 

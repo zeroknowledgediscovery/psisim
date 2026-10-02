@@ -112,11 +112,25 @@ python3 applications/psisimulation/fetch_model.py gss/gss_2018   # once
 python3 webapp/server.py --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000/>. Startup takes ~5 s (GSS 2018 is loaded and
-its $\Psi_0$ computed). Creating a session builds a resident native state
-(~3–5 s); one warm spare GSS 2018 state is kept ready so a new session starts
-immediately. Loading another survey takes a few seconds plus the download the
-first time (2–60 MB per model). An answer's native update takes 0.01–1 s.
+Open <http://127.0.0.1:8000/>. The first time a model is used, its $\Psi_0$
+and learned dependency graph are computed (about 1–10 s) and stored in a
+persistent cache; afterwards, across restarts and sessions, loading a model
+takes well under a second. Creating a session builds a resident native state
+(1–4 s, mostly reading the trees); one warm spare GSS 2018 state is kept
+ready so a new session starts immediately. The first use of another survey
+also downloads it (2–60 MB). An answer's native update takes 0.01–1 s.
+
+### Model cache
+
+`$PSISIM_CACHE_DIR/psi0/` and `$PSISIM_CACHE_DIR/deps/` hold one small
+gzipped JSON file per model (`<family>/<name>-<fingerprint>.json.gz`, tens of
+KB). The fingerprint hashes the model's tree and source-map files and the
+compiled native modules in `bin/`, so a reinstalled model or a rebuilt
+runtime is recomputed automatically and its stale entry removed; a corrupt
+entry is recomputed rather than trusted. Values round-trip exactly, so a
+cached $\Psi_0$ is bit-identical to a freshly computed one. Deleting the
+directory is always safe. The command-line simulations
+(`applications/psisimulation/`) use the same cache for $\Psi_0$.
 
 Tests (need the bindings and the model):
 
@@ -133,6 +147,7 @@ cd webapp && python3 smoke_test.py           # engine end to end
 | `PSISIM_NO_FETCH` | unset | `1` = never download; only models already under `DTAG_MODEL_ROOT` can be used |
 | `PSISIM_MODEL` | `gss/gss_2018` | model loaded at startup and offered first |
 | `PSISIM_MAX_MODELS` | `3` | loaded models kept in memory (the startup model is never evicted) |
+| `PSISIM_CACHE_DIR` | `~/.cache/psisim` | persistent cache of each model's $\Psi_0$ and dependency graph (see below); set to a persistent data directory |
 | `PSISIM_THREADS` | CPU count | native threads per call |
 | `PSISIM_MAX_SESSIONS` | `4` | resident states kept in memory (LRU eviction of idle sessions) |
 | `PSISIM_SESSION_TTL` | `1800` | idle seconds before a session is dropped |
