@@ -14,6 +14,10 @@ The repository contains the webapp, the minimal native LSM runtime it needs
 module for the update. Models come from the public DTAG model release: GSS by
 year, Afrobarometer rounds, Eurobarometer waves and WVS7.
 
+![PsiSim webapp: after two answers on GSS 2018, 61 of 1,032 other response distributions have moved](docs/screenshot.png)
+
+*GSS 2018 after two answers (`polviews` = conservative, then `god` = know god exists): the asked item collapses to the red answer, 61 other distributions change, and the largest updates pop out as before/after cards.*
+
 ## Quickstart
 
 ### Requirements
