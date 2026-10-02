@@ -111,18 +111,13 @@ and keeps every answer to about a second.
 - **Export** — JSON with the seed, answers (with the uniform draw `u`),
   per-answer change statistics and the native step summaries.
 
-### Further dynamics (API only)
+### Experimental options (API only)
 
-`POST /api/session/{id}/answer` accepts `max_steps > 0` to add propagation
-waves after the hard observation (each wave passes on only the change induced
-by the previous wave; see section 8 of the instructions and
-`tests/test_propagation_dynamics.py`), and a session can be created with
-`dynamics: "mode" | "sample"` for the optional finite-$n$ sweeps of the
-vendored `CenteredLdpPsiState` (a finite-sample / LDP experiment that moves
-$\Psi_0$ without any answer). The UI does not use either. At response scale
-1 without damping, the propagation waves do not die out on GSS 2018 (the
-pending perturbation grows ~1.3x per wave after about four waves); this is
-an open modelling question.
+The app applies exactly one update per question. For research use, the API
+also accepts `max_steps > 0` on an answer (further propagation waves) and
+`dynamics: "mode" | "sample"` on a new session (the finite-$n$ sweeps of the
+command-line tools); the app uses neither. See `webapp_instruction.md`,
+section 8, and `tests/test_propagation_dynamics.py`.
 
 ## Performance
 

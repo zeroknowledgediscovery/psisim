@@ -16,7 +16,7 @@
 > moves even without an answer (sections 4–5). The default Psi dynamics, used
 > by the webapp, apply only the answer and propagate only the change it
 > induces, so $\Psi_0$ is stationary; see the main README (Quickstart and
-> section 13.3) and [`../../webapp/README.md`](../../webapp/README.md).
+> sections 2–3) and [`../../webapp/README.md`](../../webapp/README.md).
 >
 > $\Psi_0$ is cached on disk per model and runtime build
 > (`$PSISIM_CACHE_DIR`, default `~/.cache/psisim`); cached values are

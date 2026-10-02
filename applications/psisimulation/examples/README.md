@@ -5,7 +5,7 @@ PsiSim experiment, not merely as a command-line recipe.
 
 > Its relaxation uses finite-$n$ `mode` sweeps, an optional finite-sample /
 > large-deviation experiment. The default Psi dynamics used by the webapp
-> apply only each answer (main README, section 13.3), under which $\Psi_0$
+> apply only each answer (main README, sections 2–3), under which $\Psi_0$
 > does not move without an answer.
 
 The experiment starts with the native GSS-2018 Large Science Model, constructs
