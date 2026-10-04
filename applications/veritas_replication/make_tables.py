@@ -2,6 +2,7 @@
 """Render result CSVs as markdown tables (written to findings/tables.md)."""
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -79,9 +80,16 @@ def matched(s: pd.DataFrame, ref="permutation") -> str:
     return "\n".join(lines)
 
 
+# Runs interrupted by the 2 h job limit were resumed into <name>_partN folders.
+runs = {}
+for p in sorted(R.iterdir()):
+    f = p / "auc_by_repeat.csv"
+    if f.exists() and "mechanism" in pd.read_csv(f, nrows=1).columns:
+        runs.setdefault(re.sub(r"_part\d+$", "", p.name), []).append(f)
+
 parts = []
-for name in sorted(p.name for p in R.iterdir() if (p / "auc_by_repeat.csv").exists()):
-    d = pd.read_csv(R / name / "auc_by_repeat.csv")
+for name, files in runs.items():
+    d = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     split_sd = "split_seed" in d and d.split_seed.nunique() > 1
     g = d.groupby(["mechanism", "rho_requested"])
     s = g.agg(rho_realized=("rho_realized", "mean"), auc_lsm=("auc_lsm", "mean"),
@@ -100,3 +108,49 @@ for name in sorted(p.name for p in R.iterdir() if (p / "auc_by_repeat.csv").exis
     parts.append(f"### {name}: matched realized-corruption comparison\n\n" + matched(s))
 (OUT / "tables.md").write_text("\n\n".join(parts) + "\n")
 print((OUT / "tables.md").read_text())
+
+# --------------------------------------------------------------------------
+# Detector comparisons (run_baselines.py / run_native_baselines.py)
+# --------------------------------------------------------------------------
+DET_ORDER = ["lsm", "lsm_native", "pairwise", "logreg", "latentclass", "pca", "knn",
+             "iforest", "marginal"]
+GEN_ORDER = ["permutation", "lsm_conditional", "lsm_native_conditional", "lsm_sequential",
+             "logreg_conditional", "latentclass_conditional", "splice", "uniform"]
+bruns = {}
+for p in sorted(R.iterdir()):
+    f = p / "auc_by_repeat.csv"
+    if f.exists() and "detector" in pd.read_csv(f, nrows=1).columns:
+        bruns.setdefault(re.sub(r"_part\d+$", "", p.name), []).append(f)
+bparts = []
+for name, files in bruns.items():
+    d = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    if "split_seed" in d:
+        # keep only splits whose grid is complete
+        n_full = d.groupby("split_seed").size().max()
+        full = d.groupby("split_seed").size()
+        d = d[d.split_seed.isin(full[full == n_full].index)]
+        note = f"split seeds {sorted(d.split_seed.unique().tolist())}, "
+    else:
+        note = ""
+    reps = d.groupby(["generator", "rho_requested", "detector"]).size()
+    s = d.groupby(["generator", "rho_requested", "detector"]).agg(
+        real=("rho_realized", "mean"), auc=("auc", "mean")).reset_index()
+    s.to_csv(OUT / f"{name}_summary_long.csv", index=False)
+    dets = [x for x in DET_ORDER if x in set(s.detector)]
+    gens = [x for x in GEN_ORDER if x in set(s.generator)]
+    lines = ["| Corrupted by | Requested | Realized | " + " | ".join(dets) + " |",
+             "|---|---:|---:|" + "---:|" * len(dets)]
+    for g in gens:
+        for rho in sorted(s.rho_requested.unique()):
+            t = s[(s.generator == g) & (s.rho_requested == rho)].set_index("detector")
+            if t.empty:
+                continue
+            best = t.auc[dets].max()
+            cells = [f"**{t.auc[x]:.3f}**" if t.auc[x] == best else f"{t.auc[x]:.3f}" for x in dets]
+            lines.append(f"| {g} | {pct(rho)} | {pct(t.real.mean())} | " + " | ".join(cells) + " |")
+    bparts.append(f"## {name}\n\nAUC per detector ({note}{int(reps.min())}–{int(reps.max())} "
+                  "corrupted copies per cell; the highest AUC in each row is bold).\n\n"
+                  + "\n".join(lines))
+if bparts:
+    (OUT / "detector_tables.md").write_text("\n\n".join(bparts) + "\n")
+    print((OUT / "detector_tables.md").read_text())
