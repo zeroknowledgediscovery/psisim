@@ -1,0 +1,25 @@
+[
+ {
+  "split_seed": 2,
+  "n_train": 1878,
+  "n_heldout": 470,
+  "n_items": 984,
+  "fit_seconds": {
+   "lsm": 59.1,
+   "marginal": 0.0,
+   "pairwise": 15.2,
+   "logreg": 134.4,
+   "latentclass": 3.0,
+   "pca": 1.3,
+   "iforest": 0.6,
+   "knn": 0.1
+  },
+  "heldout_nats_per_cell": {
+   "lsm": 0.7486458836798491,
+   "marginal": 1.0621518653943618,
+   "pairwise": 0.8199848318125891,
+   "logreg": 0.8792570833559539
+  },
+  "latentclass_nats_per_cell_joint": 1.028545203452578
+ }
+]

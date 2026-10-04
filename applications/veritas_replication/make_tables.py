@@ -123,12 +123,15 @@ for p in sorted(R.iterdir()):
         bruns.setdefault(re.sub(r"_part\d+$", "", p.name), []).append(f)
 bparts = []
 for name, files in bruns.items():
-    d = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    frames = [pd.read_csv(f) for f in files]
+    if "split_seed" in frames[0]:
+        # An interrupted split appears partially in one part and completely in
+        # the resumed part: keep each split only where its grid is complete.
+        n_full = max(f.groupby("split_seed").size().max() for f in frames)
+        frames = [f[f.split_seed.isin([k for k, n in f.groupby("split_seed").size().items()
+                                       if n == n_full])] for f in frames]
+    d = pd.concat(frames, ignore_index=True)
     if "split_seed" in d:
-        # keep only splits whose grid is complete
-        n_full = d.groupby("split_seed").size().max()
-        full = d.groupby("split_seed").size()
-        d = d[d.split_seed.isin(full[full == n_full].index)]
         note = f"split seeds {sorted(d.split_seed.unique().tolist())}, "
     else:
         note = ""

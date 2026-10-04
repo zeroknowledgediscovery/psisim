@@ -1,0 +1,11 @@
+{
+ "model": "/root/.cache/dtag/models/gss/gss_2016",
+ "n_rows": 1000,
+ "row_seed": 20261002,
+ "observed_cells": 238140,
+ "mean_observed_per_row": 238.14,
+ "items_observed": 388,
+ "n_items": 913,
+ "heldout_nats_per_cell_lsm": 0.7801320147773613,
+ "heldout_nats_per_cell_marg": 0.8968791652032069
+}

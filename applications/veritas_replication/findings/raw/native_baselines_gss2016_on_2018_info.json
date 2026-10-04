@@ -1,0 +1,22 @@
+{
+ "model": "/root/.cache/dtag/models/gss/gss_2016",
+ "n_train_public": 2866,
+ "train_observed_per_row": 237.59281228192603,
+ "n_eval": 1000,
+ "eval_observed_per_row": 238.14,
+ "fit_seconds": {
+  "marginal": 0.0,
+  "pairwise": 4.1,
+  "logreg": 56.3,
+  "latentclass": 2.2,
+  "pca": 2.1,
+  "iforest": 0.6,
+  "knn": 0.1
+ },
+ "nats_per_cell": {
+  "lsm_native": 0.7801320147773613,
+  "marginal": 0.8940744505601926,
+  "pairwise": 0.7055113682521134,
+  "logreg": 0.7188921542249199
+ }
+}
