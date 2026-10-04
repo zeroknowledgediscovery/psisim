@@ -53,7 +53,7 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    model = NativeLSM(args.model_dir)
+    model = NativeLSM(args.model_dir, workers=0)
     K = model.K
     audit = json.loads(Path(args.audit).read_text())
     labels = pickle.loads(Path(args.labels).read_bytes())

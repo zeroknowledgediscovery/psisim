@@ -73,8 +73,10 @@ class NativeLSM:
         self.trees = str(model_dir / "trees" / "binary")
         self.run = str(model_dir)
         _init(self.trees, self.run, self.cats)
+        # workers=0: evaluate in-process. Use it when the caller also runs
+        # joblib/loky pools; a fork pool created first can deadlock with them.
         self.pool = mp.get_context("fork").Pool(
-            workers, initializer=_init, initargs=(self.trees, self.run, self.cats))
+            workers, initializer=_init, initargs=(self.trees, self.run, self.cats)) if workers else None
 
     def encode(self, df):
         """Strings (model categories, '' = missing) -> integer codes."""
@@ -95,7 +97,8 @@ class NativeLSM:
         return -math.log(2.0) * np.asarray(r["persistence"], float)
 
     def dists(self, X):
-        per_row = self.pool.map(_w_dists, list(X), chunksize=4)
+        per_row = (self.pool.map(_w_dists, list(X), chunksize=4) if self.pool
+                   else [_w_dists(r) for r in X])
         out = []
         for j, k in enumerate(self.K):
             out.append(np.stack([pr[j] if pr[j] is not None else np.full(k, 1.0 / k)
@@ -112,9 +115,11 @@ class NativeLSM:
     def sequential(self, X, S, rng):
         seeds = rng.integers(0, 2**63 - 1, size=X.shape[0])
         args = [(X[r], np.flatnonzero(S[r]), int(seeds[r])) for r in range(X.shape[0])]
-        Y = self.pool.map(_w_sequential, args, chunksize=2)
+        Y = (self.pool.map(_w_sequential, args, chunksize=2) if self.pool
+             else [_w_sequential(a) for a in args])
         return np.stack(Y).astype(np.int32)
 
     def close(self):
-        self.pool.close()
-        self.pool.join()
+        if self.pool:
+            self.pool.close()
+            self.pool.join()
