@@ -28,6 +28,17 @@ for mod in predict_distribution psisim_dynamics; do
   fi
 done
 if [[ $needs_build == 1 ]]; then
+  # A compiler or system upgrade leaves the CMake cache pointing at files that
+  # no longer exist (e.g. the old GCC's libgomp.so); start that build afresh.
+  if [[ -f build/CMakeCache.txt ]]; then
+    while IFS= read -r path; do
+      if [[ ! -e "$path" ]]; then
+        echo "==> CMake cache refers to a missing file ($path); reconfiguring from scratch"
+        rm -rf build
+        break
+      fi
+    done < <(sed -n 's/^[^#/]*:FILEPATH=\(\/.*\)$/\1/p' build/CMakeCache.txt)
+  fi
   echo "==> Building native modules (first time takes a few minutes)"
   generator=()
   command -v ninja >/dev/null && generator=(-G Ninja)
