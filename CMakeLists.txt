@@ -17,16 +17,29 @@ if(LSM_BUILD_PYTHON_BINDINGS)
   find_package(Threads REQUIRED)
   find_package(OpenMP REQUIRED COMPONENTS CXX)
 
-  FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3)
-  FetchContent_MakeAvailable(nlohmann_json)
+  if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+  endif()
+
+  # nlohmann_json is header-only: use an installed copy if there is one,
+  # otherwise the 110 KB release archive (headers + CMake target) instead of
+  # cloning the whole repository (~300 MB).
+  find_package(nlohmann_json 3.11 QUIET)
+  if(nlohmann_json_FOUND)
+    message(STATUS "Using installed nlohmann_json ${nlohmann_json_VERSION}")
+  else()
+    FetchContent_Declare(
+      nlohmann_json
+      URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+      URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d)
+    FetchContent_MakeAvailable(nlohmann_json)
+  endif()
 
   FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG v2.12.0)
+    GIT_TAG v2.12.0
+    GIT_SHALLOW TRUE)
   FetchContent_MakeAvailable(pybind11)
 
   function(configure_psisim_binding target)
