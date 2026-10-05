@@ -50,6 +50,12 @@ After pulling changes, rerun the script (or the `cmake --build` line) so the
 native modules are rebuilt when their sources changed. If a previous session
 reappears after an upgrade, click **New session**.
 
+If a manual build fails with `ninja: error: '.../libgomp.so' ... missing and
+no known rule to make it` (or a similar missing compiler or library path),
+the compiler was upgraded after `build/` was configured. Delete `build/` and
+rerun the `cmake` lines; `run_webapp.sh` detects this and reconfigures
+automatically.
+
 ## Choosing a survey
 
 The survey bar under the header picks a model by **country** and **year**, the
